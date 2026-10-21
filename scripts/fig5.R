@@ -151,6 +151,7 @@ theme_set(
   theme_bw(base_size = 17, base_family = "Arial") +
     theme(
       axis.title        = element_text(size = 15.5),
+      axis.title.y      = element_text(size = 12.5),
       axis.text.x       = element_text(size = 14.3),
       axis.text.y       = element_text(size = 14.3),
       strip.text        = element_text(size = 15.5, face = "bold"),
