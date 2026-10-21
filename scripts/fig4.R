@@ -11,7 +11,7 @@ library(gtable)
 #   One panel per indicator; one dot per model (worst decade).
 #   Green = low concern, yellow = medium, red = high.
 #
-# Output: graphs/post_oct15/fig4.png
+# Output: graphs/fig4.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

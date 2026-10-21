@@ -13,7 +13,7 @@ library(jsonlite)
 #     Coloured     = per model
 #     Bold black   = cross-model mean
 #
-# Output: graphs/post_oct15/fig_sm5.png
+# Output: graphs/fig_sm5.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Constants (same as fig2.R) ─────────────────────────────────

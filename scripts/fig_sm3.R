@@ -9,7 +9,7 @@ library(jsonlite)
 #   rates (1 %–4 %).  x-axis = discount rate.
 #   3 subplots (columns), one per non-Meet scenario.
 #
-# Output: graphs/post_oct15/fig_sm2.png
+# Output: graphs/fig_sm2.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Constants ──────────────────────────────────────────────────

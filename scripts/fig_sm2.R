@@ -12,7 +12,7 @@ library(jsonlite)
 #   (d) Effective Radiative Forcing (moved from fig1 panel d)
 #   (e) CO₂ emissions by PRISMA cluster
 #
-# Output: graphs/post_oct15/fig_sm1.png
+# Output: graphs/fig_sm1.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

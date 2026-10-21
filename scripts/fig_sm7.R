@@ -11,7 +11,7 @@ library(ggh4x)
 #   Layout: facet_grid(scenario × indicator), one dot per model
 #   (worst decade).  Green = low, yellow = medium, red = high.
 #
-# Output: graphs/post_oct15/fig_sm6.png
+# Output: graphs/fig_sm6.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

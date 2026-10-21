@@ -4,7 +4,7 @@
 # Central store for all figure captions.
 # Each figure script calls update_caption() at the end, which
 # logs a timestamp for that figure and regenerates:
-#   graphs/post_oct15/figure_captions.txt
+#   graphs/figure_captions.txt
 #
 # To edit a caption: change the text here, then re-run the
 # corresponding figure script (or call write_captions_txt()
@@ -269,7 +269,7 @@ update_caption <- function(fig_id, graphs_dir) {
 
 # ══════════════════════════════════════════════════════════════
 # write_captions_docx()
-#   Writes graphs/post_oct15/figure_captions.docx
+#   Writes graphs/figure_captions.docx
 #   Open in Microsoft Word.
 # ══════════════════════════════════════════════════════════════
 

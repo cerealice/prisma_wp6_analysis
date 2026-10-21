@@ -6,7 +6,7 @@ library(tidyverse)
 #   in the (climate policy ambition × clean-technology investment)
 #   space, with a curved arrow tracing Late Reawakening's path.
 #
-# Output: graphs/post_oct15/fig1.png
+# Output: graphs/fig1.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

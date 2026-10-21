@@ -13,7 +13,7 @@ library(jsonlite)
 #   Exact point values at 2030, 2040, 2050.
 #   R10 regions summed within cluster before computing share.
 #
-# Output: graphs/post_oct15/fig5.png
+# Output: graphs/fig5.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

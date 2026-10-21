@@ -43,7 +43,7 @@ library(jsonlite)
 #  (8) H&S 2017 Simple    0.622·T²        H&S 2017 quadratic; no SE
 #  (9) H&S 2017 Extended  0.440·T²        H&S 2017 quadratic; no SE
 #
-# Output: graphs/post_oct15/damage_fn_sensitivity.png
+# Output: graphs/damage_fn_sensitivity.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Constants (match fig3.R) ───────────────────────────────────

@@ -11,7 +11,7 @@ library(jsonlite)
 #                                   whiskers Q10/Q90, box Q33/Q67,
 #                                   statistics across models' T50)
 #
-# Output: graphs/post_oct15/fig2.png
+# Output: graphs/fig2.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────
