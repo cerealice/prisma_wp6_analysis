@@ -139,7 +139,7 @@ load_pq <- function(prefix) {
   if (length(files) == 0) {
     backup_dir <- file.path(project_dir, "data", "backup")
     files <- list.files(backup_dir, pat, full.names = TRUE)
-    files <- files[!grepl("_meta\.parquet$", files)]
+    files <- files[!grepl("_meta\\.parquet$", files)]
     if (length(files) > 0)
       message("Using backup data for '", prefix, "' (no fresh download found).")
   }

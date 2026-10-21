@@ -4,9 +4,12 @@
 # markers to guarantee the same shape → model mapping everywhere.
 # ============================================================
 
-# ── Arial font registration for the ragg device ──────────────
-# ragg (used by RStudio) cannot resolve "Arial" via the GDI registry;
-# registering the TTF directly fixes the "font family not found" warnings.
+# ── Arial font registration ───────────────────────────────────
+# Register Arial for both the Windows GDI device (ggsave default) and
+# the ragg device (RStudio graphics pane), silencing "font family not
+# found in Windows font database" warnings on both.
+if (.Platform$OS.type == "windows")
+  windowsFonts(Arial = windowsFont("Arial"))
 local({
   if (!requireNamespace("systemfonts", quietly = TRUE)) return(invisible(NULL))
   already <- tryCatch(systemfonts::system_fonts()$family, error = function(e) character(0))
