@@ -1,0 +1,25 @@
+# Fresh data downloads (committed backups are in data/backup/)
+data/direct/
+!data/direct/.gitkeep
+
+# Output graphs (regenerate by running scripts)
+graphs/
+!graphs/.gitkeep
+
+# R session
+.Rhistory
+.RData
+.Rproj.user/
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Temporary helper scripts
+enhance_load_pq.py
+enhance_load_pq2.py
+
+# OS
+.DS_Store
+Thumbs.db
