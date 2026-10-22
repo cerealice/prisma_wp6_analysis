@@ -322,7 +322,7 @@ scen_col_text <- c(
 x_label_colours <- scen_col_text[scen_lbl_levels]
 
 # ── Panel (b): temperature boxplots ───────────────────────────
-p_b <- ggplot(box_stats,
+p_b <- suppressWarnings(ggplot(box_stats,
               aes(x = scen_label,
                   fill  = time_type,
                   ymin  = ymin, lower = lower, middle = middle,
@@ -356,7 +356,7 @@ p_b <- ggplot(box_stats,
        x = NULL, y = "\u00b0C above 1850\u20131900") +
   theme(legend.position    = "bottom",
         panel.grid.major.x = element_blank(),
-        axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold"))
+        axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold")))
 
 
 # ══════════════════════════════════════════════════════════════

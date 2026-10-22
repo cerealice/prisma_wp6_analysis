@@ -64,18 +64,24 @@ local({
   }
   t0 <- proc.time()
   jupyter_exe <- "C:/Users/Dibella/miniconda3/envs/pypsa-eur/Scripts/jupyter.exe"
-  status <- tryCatch(
-    system2(jupyter_exe,
-            args    = c("nbconvert", "--to", "notebook",
-                        "--execute", "--inplace",
-                        "--ExecutePreprocessor.timeout=600",
-                        shQuote(normalizePath(nb_path, winslash = "/"))),
-            stdout  = TRUE, stderr = TRUE),
-    error = function(e) { message("  jupyter not found: ", conditionMessage(e)); NULL }
+  status <- suppressWarnings(
+    tryCatch(
+      system2(jupyter_exe,
+              args    = c("nbconvert", "--to", "notebook",
+                          "--execute", "--inplace",
+                          "--ExecutePreprocessor.timeout=600",
+                          shQuote(normalizePath(nb_path, winslash = "/"))),
+              stdout  = TRUE, stderr = TRUE),
+      error = function(e) { message("  jupyter not found: ", conditionMessage(e)); NULL }
+    )
   )
-  elapsed <- round((proc.time() - t0)[["elapsed"]], 1)
+  elapsed   <- round((proc.time() - t0)[["elapsed"]], 1)
+  exit_code <- attr(status, "status")
   if (is.null(status)) {
     message("  Could not run notebook (jupyter not in PATH).")
+  } else if (!is.null(exit_code) && exit_code != 0L) {
+    message("  Notebook execution FAILED (exit code ", exit_code, "):")
+    message(paste(tail(status, 40), collapse = "\n"))
   } else {
     message("  Done (", elapsed, "s)")
   }

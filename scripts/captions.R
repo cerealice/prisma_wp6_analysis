@@ -136,12 +136,13 @@ CAPTIONS <- list(
     text  = paste0(
       "Supplementary Figure SM3 | Sensitivity of GDP Net Present Value to discount rate. ",
       "NPV of GDP relative to the Meet Aspirations scenario (% of damage-adjusted Meet NPV) ",
-      "computed at discount rates of 1%, 2% (default, matching Figure 3), 3%, and 4%. ",
+      "computed at discount rates of 1%, 2% (default, matching Figure 3b), 3%, and 4%. ",
       "Each panel shows one non-Meet scenario; x-axis is the discount rate. ",
       "Lines connect per-model median NPV (T50 surface temperature); ",
-      "error bars span the Q10-Q90 range of the Howard & Sterner damage uncertainty ",
+      "error bars span the Q10\u2013Q90 range of the Howard & Sterner damage uncertainty ",
       "(5000 Monte Carlo draws). Only models with endogenous GDP are included. ",
-      "Damage function: D(T) = alpha * T^1.5 + beta * T."
+      "Damage function: D(T) = \u03b1\u00b7T^1.5 + \u03b2\u00b7T, ",
+      "where \u03b1 and \u03b2 are OLS estimates from Howard & Sterner (2017)."
     )
   ),
 

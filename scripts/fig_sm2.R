@@ -78,19 +78,19 @@ all_regions   <- c("World", r10_regions)
 
 # ── Theme ──────────────────────────────────────────────────────
 theme_set(
-  theme_bw(base_size = 17, base_family = "Arial") +
+  theme_bw(base_size = 20, base_family = "Arial") +
     theme(
-      plot.title       = element_text(size = 16.8, face = "bold", hjust = 0.5),
-      plot.subtitle    = element_text(size = 12.4, colour = "grey35", lineheight = 1.3),
-      axis.title       = element_text(size = 15.5),
-      axis.text        = element_text(size = 14.3),
+      plot.title       = element_text(size = 20.0, face = "bold", hjust = 0.5),
+      plot.subtitle    = element_text(size = 15.0, colour = "grey35", lineheight = 1.3),
+      axis.title       = element_text(size = 18.5),
+      axis.text        = element_text(size = 17.0),
       axis.text.x      = element_text(angle = 45, hjust = 1),
       strip.background = element_blank(),
-      strip.text       = element_text(size = 15.5, face = "bold"),
+      strip.text       = element_text(size = 18.5, face = "bold"),
       panel.grid.minor = element_blank(),
-      legend.title     = element_text(size = 14.3),
-      legend.text      = element_text(size = 13.6),
-      plot.caption     = element_text(size = 11.8, colour = "grey50", hjust = 0)
+      legend.title     = element_text(size = 17.0),
+      legend.text      = element_text(size = 16.5),
+      plot.caption     = element_text(size = 14.5, colour = "grey50", hjust = 0)
     )
 )
 
@@ -495,11 +495,6 @@ co2_band_cluster <- co2_cluster_interp %>%
 x_breaks_ts <- seq(2020, 2100, 20)
 x_breaks_cl <- c(2020, seq(2040, 2100, by = 20))
 
-ts_subtitle <- paste0(
-  "Ribbon = min\u2013max spread across models; ",
-  "bold line = most-central model (min RMSE to ensemble median).  ",
-  "Circle = peak; label = peak value (year)."
-)
 
 # ── Panel (a): T_median (p50) ─────────────────────────────────
 p_a <- ggplot(web_ts_p50,
@@ -528,11 +523,8 @@ p_a <- ggplot(web_ts_p50,
   scale_x_continuous(breaks = x_breaks_ts,
                      expand = expansion(mult = c(0.02, 0.06))) +
   coord_cartesian(ylim = c(ts_y_lo, ts_y_hi)) +
-  labs(
-    title   = "(a) T\u2085\u2080 (median) timeseries",
-    caption = ts_subtitle,
-    x = NULL, y = "\u00b0C above 1850\u20131900"
-  ) +
+  labs(title = "(a) T\u2085\u2080 (median) timeseries",
+       x = NULL, y = "\u00b0C above 1850\u20131900") +
   theme(legend.position = "none", aspect.ratio = 1)
 
 # ── Panel (b): T_67th (p67) ───────────────────────────────────
@@ -562,11 +554,8 @@ p_b <- ggplot(web_ts_p67,
   scale_x_continuous(breaks = x_breaks_ts,
                      expand = expansion(mult = c(0.02, 0.06))) +
   coord_cartesian(ylim = c(ts_y_lo, ts_y_hi)) +
-  labs(
-    title   = "(b) T\u2086\u2087 (67th pct) timeseries",
-    caption = ts_subtitle,
-    x = NULL, y = "\u00b0C above 1850\u20131900"
-  ) +
+  labs(title = "(b) T\u2086\u2087 (67th pct) timeseries",
+       x = NULL, y = "\u00b0C above 1850\u20131900") +
   theme(legend.position = "none", aspect.ratio = 1)
 
 # ── Panel (c): Cumulative CO₂ from 2020 ───────────────────────
@@ -584,13 +573,11 @@ p_c <- ggplot(co2_cumul_band,
   scale_colour_manual(values = scen_col_lbl, name = NULL) +
   scale_fill_manual(  values = scen_col_lbl, name = NULL) +
   scale_x_continuous(breaks = x_breaks_co2) +
-  labs(title   = "(c) Cumulative CO\u2082 from 2020",
-       x       = NULL, y = "Gt CO\u2082",
-       caption = "IPCC AR6 WG1 remaining carbon budgets from 2020 (CO\u2082-only).") +
+  labs(title = "(c) Cumulative CO\u2082 from 2020",
+       x = NULL, y = "Gt CO\u2082") +
   guides(colour = guide_legend(ncol = 2, override.aes = list(fill = NA)), fill = "none") +
   theme(legend.position = "none",
         axis.text.x     = element_text(angle = 45, hjust = 1),
-        plot.caption    = element_text(size = 11.5, colour = "grey40", hjust = 0),
         aspect.ratio    = 1)
 
 # ── Panel (d): ERF or non-CO₂ GHG ────────────────────────────
@@ -628,11 +615,8 @@ p_e <- ggplot(co2_band_cluster,
   scale_colour_manual(values = scen_col_lbl, name = NULL) +
   scale_fill_manual(  values = scen_col_lbl, name = NULL) +
   scale_x_continuous(breaks = x_breaks_cl) +
-  labs(
-    title = "(e) CO\u2082 emissions by PRISMA cluster",
-    x   = NULL,
-    y   = "Gt CO\u2082/yr",
-  ) +
+  labs(title = "(e) CO\u2082 emissions by PRISMA cluster",
+       x = NULL, y = "Gt CO\u2082/yr") +
   guides(
     colour = guide_legend(ncol = 4, override.aes = list(fill = NA)),
     fill   = "none"

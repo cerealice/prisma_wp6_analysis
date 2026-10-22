@@ -338,22 +338,14 @@ p <- ggplot(results_dr,
   facet_wrap(~ scenario_label, nrow = 1) +
   scale_colour_manual(values = model_colors_sm, name = NULL) +
   labs(
-    title   = "GDP NPV \u2014 discount rate sensitivity (T\u2085\u2080 median GSAT)",
-    x       = "Discount rate",
-    y       = "NPV vs Meet Aspirations (% of damage-adjusted Meet NPV)",
-    caption = paste0(
-      "Error bars = Q10\u2013Q90 H&S damage uncertainty (MC N\u202f=\u202f", format(N_MC, big.mark = ","), ").  ",
-      "Discount rate '2% (default)' matches panel (b) of fig2.\n",
-      sprintf(
-        "\u03b1\u202f=\u202f%.3f (SE\u202f%.3f), \u03b2\u202f=\u202f%.3f (SE\u202f%.3f).  ",
-        ALPHA_C, SE_ALPHA_C, BETA_C, SE_BETA_C
-      ),
-      "D(T)\u202f=\u202f\u03b1\u00b7T^1.5\u202f+\u202f\u03b2\u00b7T.  Endogenous GDP models only."
-    )
+    title = "GDP NPV: discount rate sensitivity (T\u2085\u2080 median GSAT)",
+    x     = NULL,
+    y     = "NPV vs Meet Aspirations (% of damage-adjusted Meet NPV)"
   ) +
   guides(colour = guide_legend(ncol = 1, override.aes = list(linewidth = 1.5))) +
   theme(legend.position = "right",
-        axis.text.x     = element_text(size = 13.0, face = "bold"))
+        axis.text.x     = element_text(size = 13.0, face = "bold"),
+        axis.title.y    = element_text(size = 9.0))
 
 n_scens  <- length(scens_nonmeet)
 out_file <- file.path(graphs_dir, "fig_sm3.png")
