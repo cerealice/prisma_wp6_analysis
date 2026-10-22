@@ -4,7 +4,7 @@ library(patchwork)
 library(jsonlite)
 
 # ══════════════════════════════════════════════════════════════
-# PURPOSE — post-Oct-15 supplementary figure SM1
+# PURPOSE — post-Oct-15 supplementary figure SM2
 #
 #   (a) T_median (p50) timeseries by scenario
 #   (b) T_67th   (p67) timeseries by scenario  [same y axis as (a)]
@@ -12,7 +12,7 @@ library(jsonlite)
 #   (d) Effective Radiative Forcing (moved from fig1 panel d)
 #   (e) CO₂ emissions by PRISMA cluster
 #
-# Output: graphs/fig_sm1.png
+# Output: graphs/fig_sm2.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Paths ──────────────────────────────────────────────────────

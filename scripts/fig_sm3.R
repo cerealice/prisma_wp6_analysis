@@ -3,13 +3,13 @@ library(arrow)
 library(jsonlite)
 
 # ══════════════════════════════════════════════════════════════
-# PURPOSE — post-Oct-15 supplementary figure SM2
+# PURPOSE — post-Oct-15 supplementary figure SM3
 #   GDP NPV sensitivity to discount rate — T_median (p50) only.
 #   Panel (b) style from fig2.R replicated at four discount
 #   rates (1 %–4 %).  x-axis = discount rate.
 #   3 subplots (columns), one per non-Meet scenario.
 #
-# Output: graphs/fig_sm2.png
+# Output: graphs/fig_sm3.png
 # ══════════════════════════════════════════════════════════════
 
 # ── Constants ──────────────────────────────────────────────────
@@ -186,6 +186,38 @@ gdp_all <- bind_rows(
 ) %>% filter(!is.na(value))
 gdp_all <- fix_gem_e3_years(gdp_all)
 
+# Fallback: if world-level GDP is missing, aggregate from R10 regions
+if (nrow(gdp_all) == 0) {
+  r10_regions_sm3 <- c(
+    "Africa (R10)", "China+ (R10)", "Europe (R10)", "India+ (R10)",
+    "Latin America (R10)", "Middle East (R10)", "North America (R10)",
+    "Other (R10)", "Pacific OECD (R10)", "Reforming Economies (R10)",
+    "Rest of Asia (R10)"
+  )
+  load_gdp_r10 <- function(prefix, varname) {
+    tryCatch(
+      load_pq(prefix) %>%
+        filter(variable == varname, region %in% r10_regions_sm3, scenario %in% scenarios),
+      error = function(e) NULL
+    )
+  }
+  gdp_mer_r10_raw <- load_gdp_r10("gdp_mer_r10", "GDP|MER")
+  gdp_ppp_r10_raw <- load_gdp_r10("gdp_ppp_r10", "GDP|PPP")
+  models_mer_r10  <- if (!is.null(gdp_mer_r10_raw)) unique(as.character(gdp_mer_r10_raw$model)) else character(0)
+  gdp_r10_raw <- bind_rows(
+    gdp_mer_r10_raw,
+    if (!is.null(gdp_ppp_r10_raw)) filter(gdp_ppp_r10_raw, !model %in% models_mer_r10) else NULL
+  ) %>% filter(!is.na(value))
+  gdp_r10_raw <- fix_gem_e3_years(gdp_r10_raw)
+  if (nrow(gdp_r10_raw) > 0) {
+    message("World GDP parquet empty \u2014 aggregating world total from R10 regions.")
+    gdp_all <- gdp_r10_raw %>%
+      group_by(model, scenario, variable, year) %>%
+      summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+      mutate(region = "World")
+  }
+}
+
 ca_backup_dir <- file.path(project_dir, "data", "climate_assessment")
 ca_files <- list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
 ca_files <- ca_files[!grepl("_meta\\.parquet$", ca_files)]
@@ -345,7 +377,7 @@ p <- ggplot(results_dr,
   guides(colour = guide_legend(ncol = 1, override.aes = list(linewidth = 1.5))) +
   theme(legend.position = "right",
         axis.text.x     = element_text(size = 13.0, face = "bold"),
-        axis.title.y    = element_text(size = 9.0))
+        axis.title.y    = element_text(size = 11.0))
 
 n_scens  <- length(scens_nonmeet)
 out_file <- file.path(graphs_dir, "fig_sm3.png")

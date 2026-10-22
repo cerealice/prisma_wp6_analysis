@@ -248,6 +248,15 @@ gdp_r10_all <- bind_rows(
 ) %>% filter(!is.na(value))
 gdp_r10_all <- fix_gem_e3_years(gdp_r10_all)
 
+# Fallback: if world-level GDP is missing, aggregate from R10 regions
+if (nrow(gdp_all) == 0 && nrow(gdp_r10_all) > 0) {
+  message("World GDP parquet empty \u2014 aggregating world total from R10 regions.")
+  gdp_all <- gdp_r10_all %>%
+    group_by(model, scenario, variable, year) %>%
+    summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+    mutate(region = "World")
+}
+
 # ── GSAT ───────────────────────────────────────────────────────
 ca_backup_dir <- file.path(project_dir, "data", "climate_assessment")
 ca_files <- list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
@@ -352,6 +361,8 @@ for (mod in use_models) {
     ) %>%
     mutate(gdp_v1 = value * (1 - damage_fn(p50) / 100))
 
+  message("  [diag] ", mod, ": joined=", nrow(joined),
+          " joined_scens=", paste(unique(joined$scenario), collapse="|"))
   meet_ref <- joined %>% filter(scenario == ma_scen) %>%
     select(year, meet_raw = value, meet_v1 = gdp_v1)
   if (nrow(meet_ref) < 2) { message("Skipping TS ", mod, " \u2014 no Meet"); next }
