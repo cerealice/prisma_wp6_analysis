@@ -7,8 +7,8 @@ library(jsonlite)
 # PURPOSE — post-Oct-13 fig 2 / fig SM2 / fig SM3
 #   Produces three output files, one per non-Meet scenario:
 #     fig3.png    — Shifted Ambition
-#     fig_sm2.png — Late Reawakening
-#     fig_sm3.png — Tech Momentum
+#     fig_sm6.png — Late Reawakening
+#     fig_sm8.png — Tech Momentum
 #
 # Each file has three panels:
 #   (a) GDP timeseries vs Meet Aspirations (world, by model)
@@ -706,8 +706,8 @@ pb_ypad <- diff(pb_raw) * 0.08
 pb_ylim <- pb_raw + c(-pb_ypad, pb_ypad)
 
 make_figure("SSP2 - Asymmetric Roll-Back", "Shifted Ambition", "fig3.png",    pb_ylim)
-make_figure("SSP2 - Late Reawakening",     "Late Reawakening", "fig_sm4.png", pb_ylim)
-make_figure("SSP2 - Staying Alive",        "Tech Momentum",    "fig_sm5.png", pb_ylim)
+make_figure("SSP2 - Late Reawakening",     "Late Reawakening", "fig_sm6.png", pb_ylim)
+make_figure("SSP2 - Staying Alive",        "Tech Momentum",    "fig_sm8.png", pb_ylim)
 
 # ── Update figure captions Word document ──────────────────────
 local({

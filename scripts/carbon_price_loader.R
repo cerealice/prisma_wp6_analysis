@@ -31,26 +31,18 @@ load_cp_weighted <- function(
   xl_path      <- file.path(data_dir, "carbon_price_weighted_r10.xlsx")
   compute_path <- file.path(project_dir, "scripts", "compute_carbon_price_r10.R")
 
-  # ── Auto-generate if Excel is missing ─────────────────────────────────────────
+  # ── Run compute script (handles its own freshness check internally) ───────────
+  # Always called: the script skips aggregation if Excel is already newer than
+  # the underlying parquets, so repeated calls are cheap once the data is fresh.
+  if (!file.exists(compute_path)) {
+    stop(
+      "compute_carbon_price_r10.R not found:\n  ", compute_path,
+      "\nCopy it from prisma_diagnostics/scripts/ into this project's scripts/ folder."
+    )
+  }
+  source(compute_path, local = FALSE)
   if (!file.exists(xl_path)) {
-    if (!file.exists(compute_path)) {
-      stop(
-        "carbon_price_weighted_r10.xlsx not found and compute script missing:\n  ",
-        compute_path
-      )
-    }
-    message(strrep("=", 60))
-    message("carbon_price_weighted_r10.xlsx not found.")
-    message("Running compute_carbon_price_r10.R to generate it ...")
-    message("(This downloads from PRISMA — happens only once.)")
-    message(strrep("=", 60))
-    source(compute_path, local = FALSE)
-    if (!file.exists(xl_path)) {
-      stop("compute_carbon_price_r10.R ran but did not produce ", xl_path)
-    }
-    message(strrep("=", 60))
-    message("Excel generated successfully. Future calls will use the cached file.")
-    message(strrep("=", 60))
+    stop("compute_carbon_price_r10.R ran but did not produce ", xl_path)
   }
 
   # ── Load and filter ───────────────────────────────────────────────────────────

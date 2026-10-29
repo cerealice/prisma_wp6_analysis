@@ -100,7 +100,6 @@ short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_na
 theme_set(
   theme_bw(base_size = 15, base_family = "Arial") +
     theme(
-      plot.caption       = element_text(size = 11.1, colour = "grey50", hjust = 0),
       axis.title         = element_text(size = 13.6),
       axis.text          = element_text(size = 12.4),
       axis.text.x        = element_text(angle = 45, hjust = 1),
@@ -359,15 +358,8 @@ p <- ggplot(ts_cl,
   ) +
   scale_x_continuous(breaks = seq(2020, 2100, 20)) +
   labs(
-    x       = NULL,
-    y       = "Annual GDP vs Meet Aspirations (%)",
-    caption = paste0(
-      "Solid = undamaged GDP; dashed = damage-adjusted GDP (global GSAT T\u2085\u2080, H&S damage function).\n",
-      sprintf(
-        "D(T) = \u03b1\u00b7T^1.5 + \u03b2\u00b7T (H&S).  \u03b1\u202f=\u202f%.3f, \u03b2\u202f=\u202f%.3f.  Endogenous GDP models only.",
-        ALPHA_C, BETA_C
-      )
-    )
+    x = NULL,
+    y = "Annual GDP vs Meet Aspirations (%)"
   ) +
   guides(
     colour   = guide_legend(ncol = 1, order = 1,
@@ -378,7 +370,7 @@ p <- ggplot(ts_cl,
 
 n_rows <- length(scens_nonmeet)
 n_cols <- length(cluster_order)
-out_file <- file.path(graphs_dir, "fig_sm6.png")
+out_file <- file.path(graphs_dir, "fig_sm5.png")
 ggsave(out_file, p,
        width  = 4.5 * n_cols + 2.5,
        height = 3.5 * n_rows + 2.0,
@@ -391,6 +383,6 @@ local({
   cap_script <- file.path(scripts_dir, "captions.R")
   if (file.exists(cap_script)) {
     source(cap_script, local = TRUE)
-    update_caption("fig_sm6", graphs_dir)
+    update_caption("fig_sm5", graphs_dir)
   }
 })

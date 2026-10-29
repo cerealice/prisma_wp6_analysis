@@ -437,22 +437,14 @@ p_dot <- ggplot(dot_df, aes(x = model_short, y = value)) +
   scale_shape_manual(values = shape_vec, name = "Model") +
   scale_y_continuous(expand = expansion(mult = c(0.12, 0.24))) +
   labs(
-    title    = "Brutschin et al. (2021, Table 1) feasibility indicators for three PRISMA scenarios",
-    subtitle = paste0(
-      "One dot per model: value in the worst decade (2030\u20132100). ",
-      "Dashed = medium concern threshold; dotted = high concern threshold. ",
-      "Green = low, yellow = medium, red = high."
-    ),
-    x       = NULL,
-    y       = "Value (worst decade)",
-    caption = "Brutschin et al. (2021), Environ. Res. Lett. 16, 064069."
+    title = "Brutschin et al. (2021, Table 1) feasibility indicators for three PRISMA scenarios",
+    x     = NULL,
+    y     = "Value (worst decade)"
   ) +
   guides(shape = guide_legend(ncol = 1, override.aes = list(size = 3.5))) +
   theme_bw(base_size = 16, base_family = "Arial") +
   theme(
     plot.title         = element_text(size = 18, face = "bold"),
-    plot.subtitle      = element_text(size = 13, colour = "grey30", lineheight = 1.3),
-    plot.caption       = element_text(size = 12,  colour = "grey50", hjust = 0),
     axis.text.x        = element_text(size = 13, angle = 35, hjust = 1),
     axis.text.y        = element_text(size = 13),
     strip.text.x       = element_text(size = 13, face = "bold", lineheight = 1.15),

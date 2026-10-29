@@ -183,6 +183,19 @@ fe_raw <- load_pq("fig4alt_fe_r10") %>%
          year     %in% all_years) %>%
   fix_gem_e3_years()
 
+# ── Short model name lookup (same abbreviations as fig4.R) ────
+model_short_names <- c(
+  "GEM-E3 V2026"                       = "GEM-E3",
+  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMAGE 3.4"                          = "IMAGE",
+  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGEix",
+  "OPEN-PROM 2.2"                      = "OPEN-PROM",
+  "REMIND-MAgPIE 3.6-4.14"            = "REMIND",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND",
+  "WITCH 6.0"                          = "WITCH"
+)
+short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_names[x], x)
+
 # ══════════════════════════════════════════════════════════════
 # 2. MODEL FILTERING
 # ══════════════════════════════════════════════════════════════
@@ -264,7 +277,8 @@ all_shares <- bind_rows(pe_share, fe_share) %>%
 
 dots <- all_shares %>%
   filter(year %in% plot_years) %>%
-  mutate(year_f = factor(year, levels = as.character(plot_years)))
+  mutate(year_f    = factor(year, levels = as.character(plot_years)),
+         model_lbl = factor(short_name(model), levels = sort(unique(short_name(model)))))
 
 summary_df <- dots %>%
   group_by(year_f, scenario, cluster, metric) %>%
@@ -290,14 +304,14 @@ labels_df <- summary_df %>%
 # ══════════════════════════════════════════════════════════════
 # 6. PLOT
 # ══════════════════════════════════════════════════════════════
-model_shapes <- resolve_model_shapes(sort(unique(dots$model)))
+model_shapes <- resolve_model_shapes(sort(unique(dots$model_lbl)))
 dodge <- position_dodge(width = 0.8)
 
 p <- ggplot(summary_df,
             aes(x = year_f, y = median_val, fill = scenario, group = scenario)) +
   geom_col(position = dodge, width = 0.7, alpha = 0.85) +
   geom_point(data = dots,
-             aes(y = value, shape = model, group = scenario),
+             aes(y = value, shape = model_lbl, group = scenario),
              colour = "black", size = 2.8, alpha = 0.45, position = dodge) +
   geom_text(data    = labels_df,
             aes(x = year_f, y = median_val, group = scenario, label = label_text),
@@ -305,7 +319,8 @@ p <- ggplot(summary_df,
             vjust     = -0.4, hjust = -0.1, size = 4.9, fontface = "bold", colour = "grey20",
             inherit.aes = FALSE) +
   scale_fill_manual(values = scenario_colors, labels = scenario_labels, name = "Scenario") +
-  scale_shape_manual(values = model_shapes, name = "Model") +
+  scale_shape_manual(values = model_shapes, name = "Model",
+                     labels = names(model_shapes)) +
   facet_grid(metric ~ cluster, scales = "free_y", switch = "y") +
   labs(x = NULL, y = NULL) +
   guides(

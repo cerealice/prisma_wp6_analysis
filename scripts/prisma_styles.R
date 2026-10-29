@@ -23,6 +23,7 @@ local({
 })
 
 model_shapes <- c(
+  # Full names
   "GEM-E3 V2026"                          = 16,   # filled circle
   "IMACLIM 2.0"                           = 17,   # filled triangle up
   "IMAGE 3.4"                             = 15,   # filled square
@@ -30,7 +31,15 @@ model_shapes <- c(
   "OPEN-PROM 2.2"                         =  8,   # asterisk / star
   "REMIND-MAgPIE 3.7-4.14"               =  1,   # open circle
   "WITCH 6.0"                             =  2,   # open triangle up
-  "WITCH 6.0-EU28"                        =  0    # open square
+  "WITCH 6.0-EU28"                        =  0,   # open square
+  # Short names (same shapes — used when legends show abbreviations)
+  "GEM-E3"                                = 16,
+  "IMACLIM"                               = 17,
+  "IMAGE"                                 = 15,
+  "MESSAGEix"                             = 18,
+  "OPEN-PROM"                             =  8,
+  "REMIND"                                =  1,
+  "WITCH"                                 =  2
 )
 
 # Call this instead of using model_shapes directly.

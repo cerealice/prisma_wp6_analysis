@@ -247,48 +247,44 @@ co2_band <- co2_world %>%
   mutate(scenario = factor(scenario, levels = scen_lbl_levels))
 
 # ══════════════════════════════════════════════════════════════
-# 3. PANEL (b) — Temperature boxplots
-#    Use all three MAGICC percentiles (T33, T50, T67) from every
-#    model, so the box statistics reflect both model spread and
-#    MAGICC config uncertainty.
-#    Box: Q33–Q67 across (model × percentile). Whiskers: Q10–Q90.
+# 3. PANEL (b) — Temperature boxplot of ensemble 67th percentile
+#    For each model: p67 at peak and at 2100.
+#    Box = actual quartiles of those 7 model p67 values.
+#    Points overlaid on each box.
 # ══════════════════════════════════════════════════════════════
 
-# Pivot the three reported percentiles to long form
-gsat_long <- gsat %>%
-  pivot_longer(c(p33, p50, p67), names_to = "pct", values_to = "temp_val") %>%
-  filter(!is.na(temp_val))
+# Peak: p67 at the year each model's T50 peaks
+peak_p67 <- gsat %>%
+  group_by(model, scenario) %>%
+  slice_max(p50, n = 1, with_ties = FALSE) %>%
+  ungroup() %>%
+  transmute(model, scenario, temp_val = p67,
+            time_type = "Peak temperature")
 
-# Peak: maximum across years for each model × scenario × percentile
-peak_all <- gsat_long %>%
-  group_by(model, scenario, pct) %>%
-  summarise(temp_val = max(temp_val, na.rm = TRUE), .groups = "drop") %>%
-  mutate(time_type = "Peak temperature")
-
-# T@2100: value at year 2100 for each model × scenario × percentile
-end_all <- gsat_long %>%
+# T@2100: p67 at year 2100
+end_p67 <- gsat %>%
   filter(year == 2100) %>%
-  select(model, scenario, pct, temp_val) %>%
-  mutate(time_type = "Temperature at 2100")
+  transmute(model, scenario, temp_val = p67,
+            time_type = "Temperature at 2100")
 
-# Box statistics computed across all (model × percentile) combinations
-box_stats <- bind_rows(peak_all, end_all) %>%
+box_data <- bind_rows(peak_p67, end_p67) %>%
   mutate(
     scen_label = factor(
       unname(scen_labels_lbl[as.character(scenario)]),
       levels = scen_lbl_levels
     ),
-    time_type = factor(time_type, levels = c("Peak temperature", "Temperature at 2100"))
+    time_type = factor(time_type,
+                       levels = c("Peak temperature", "Temperature at 2100"))
   ) %>%
+  filter(!is.na(temp_val))
+
+# Median per scenario × timing — for value labels on boxes
+med_box <- box_data %>%
   group_by(scen_label, time_type) %>%
-  summarise(
-    ymin   = quantile(temp_val, 0.10, na.rm = TRUE),
-    lower  = quantile(temp_val, 0.33, na.rm = TRUE),
-    middle = quantile(temp_val, 0.50, na.rm = TRUE),
-    upper  = quantile(temp_val, 0.67, na.rm = TRUE),
-    ymax   = quantile(temp_val, 0.90, na.rm = TRUE),
-    .groups = "drop"
-  )
+  summarise(med  = median(temp_val, na.rm = TRUE),
+            q75  = quantile(temp_val, 0.75, na.rm = TRUE),
+            .groups = "drop") %>%
+  mutate(label_y = (med + q75) / 2)   # midpoint of upper box half
 
 
 # ══════════════════════════════════════════════════════════════
@@ -319,44 +315,63 @@ scen_col_text <- c(
   "Tech Momentum"    = "#1565C0",
   "Shifted Ambition" = "#666666"
 )
-x_label_colours <- scen_col_text[scen_lbl_levels]
+# element_text() requires a plain unnamed vector in factor-level order
+x_label_colours <- unname(scen_col_text[scen_lbl_levels])
 
-# ── Panel (b): temperature boxplots ───────────────────────────
-p_b <- suppressWarnings(ggplot(box_stats,
-              aes(x = scen_label,
-                  fill  = time_type,
-                  ymin  = ymin, lower = lower, middle = middle,
-                  upper = upper, ymax  = ymax)) +
+# ── Panel (b): boxplot of ensemble 67th percentile + model points ─
+p_b <- ggplot(box_data,
+              aes(x      = scen_label,
+                  y      = temp_val,
+                  fill   = time_type,
+                  colour = time_type,
+                  group  = interaction(scen_label, time_type))) +
   geom_hline(yintercept = 2.0, linewidth = 0.6, linetype = "dotted", colour = "black") +
   annotate("text", x = Inf, y = 2.0, label = "2.0\u00b0C",
            hjust = 1.08, vjust = -0.45, size = 5.0, colour = "black") +
-  geom_boxplot(aes(group = interaction(scen_label, time_type)),
-               stat     = "identity",
-               position = position_dodge(width = 0.65),
-               width    = 0.55, alpha = 0.75,
-               colour   = "grey20", linewidth = 0.55) +
-  geom_text(data = box_stats,
-            aes(x     = scen_label,
-                y     = middle,
-                group = interaction(scen_label, time_type),
-                label = sprintf("%.1f\u00b0C", middle)),
-            position     = position_dodge(width = 0.65),
-            vjust        = -0.55, size = 3.5, colour = "grey20",
-            fontface     = "bold",
-            inherit.aes  = FALSE) +
+  # Box: quartiles of the 7 model p67 values
+  geom_boxplot(
+    position      = position_dodge(width = 0.65),
+    width         = 0.50, alpha = 0.35,
+    outlier.shape = NA,          # points added explicitly below
+    colour        = "grey25", linewidth = 0.55
+  ) +
+  # Individual model p67 points overlaid
+  geom_point(
+    position = position_jitterdodge(dodge.width = 0.65,
+                                    jitter.width = 0.10,
+                                    seed = 42),
+    size = 2.2, shape = 16, alpha = 0.85
+  ) +
+  # Median value label above each box
+  geom_text(
+    data        = med_box,
+    aes(x = scen_label, y = label_y,
+        label  = sprintf("%.2f\u00b0C", med),
+        group  = time_type),
+    position    = position_dodge(width = 0.65),
+    vjust       = 0.5, size = 3.5, fontface = "bold",
+    colour      = "black",
+    inherit.aes = FALSE
+  ) +
+  scale_colour_manual(
+    values = c("Peak temperature"    = "#D4820A",
+               "Temperature at 2100" = "#A0306A"),
+    name   = NULL
+  ) +
   scale_fill_manual(
-    values = c("Peak temperature"    = "#FFF9C4",
-               "Temperature at 2100" = "#FFB6C1"),
+    values = c("Peak temperature"    = "#D4820A",
+               "Temperature at 2100" = "#A0306A"),
     name   = NULL
   ) +
   scale_x_discrete(labels = scen_labels_wrap) +
   scale_y_continuous(limits = c(1.3, NA),
-                     expand = expansion(mult = c(0.02, 0.05))) +
-  labs(title = "(b) Global surface temperature",
+                     expand = expansion(mult = c(0.02, 0.07))) +
+  labs(title = "(b) Global surface temperature (67th percentile)",
        x = NULL, y = "\u00b0C above 1850\u20131900") +
+  guides(fill = "none") +
   theme(legend.position    = "bottom",
         panel.grid.major.x = element_blank(),
-        axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold")))
+        axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold"))
 
 
 # ══════════════════════════════════════════════════════════════

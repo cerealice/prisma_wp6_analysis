@@ -558,6 +558,6 @@ p <- ggplot() +
 # 7. SAVE
 # ══════════════════════════════════════════════════════════════
 
-out_file <- file.path(graphs_dir, "fig_sm8.png")
+out_file <- file.path(graphs_dir, "fig_sm4.png")
 ggsave(out_file, p, width = 22, height = 9, dpi = 300)
 message("Saved: ", out_file)
