@@ -69,7 +69,7 @@ model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
   "IMACLIM 2.0"                        = "IMACLIM",
   "IMAGE 3.4"                          = "IMAGE",
-  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGEix",
+  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
   "REMIND-MAgPIE 3.6-4.14"            = "REMIND 3.6",
   "REMIND-MAgPIE 3.7-4.14"            = "REMIND 3.7",
@@ -242,11 +242,11 @@ indicators <- list(
          list(value = ratio, level = level)
        }),
 
-  simple_ind("3.1", "Technological", "Wind scale-up", "pp/decade", 10, 20,
+  simple_ind("3.1", "Technological", "Wind scale-up", "%/decade", 10, 20,
     function(m, s) dec_delta(share_series(elec_raw, m, s,
       "Secondary Energy|Electricity|Wind", "Secondary Energy|Electricity"))),
 
-  simple_ind("3.2", "Technological", "Solar scale-up", "pp/decade", 10, 20,
+  simple_ind("3.2", "Technological", "Solar scale-up", "%/decade", 10, 20,
     function(m, s) dec_delta(share_series(elec_raw, m, s,
       "Secondary Energy|Electricity|Solar", "Secondary Energy|Electricity"))),
 
