@@ -2,6 +2,9 @@
 data/direct/
 !data/direct/.gitkeep
 
+# Climate assessment outputs — keep only one committed backup, ignore the rest
+data/climate_assessment/*.parquet
+
 # Output graphs (regenerate by running scripts)
 graphs/
 !graphs/.gitkeep

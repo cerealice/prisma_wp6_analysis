@@ -48,15 +48,15 @@ CAPTIONS <- list(
   fig2 = list(
     label = "Figure 2",
     text  = paste0(
-      "Figure 2 | CO2 emissions and surface temperature across PRISMA scenarios. ",
-      "(a) World CO2 emissions, 2020-2100. ",
+      "Figure 2 | CO\u2082 emissions and surface temperature across PRISMA scenarios. ",
+      "(a) World CO\u2082 emissions, 2020\u20132100. ",
       "Lines show the cross-model median; ribbons span the model minimum to maximum. ",
-      "(b) Distribution of global surface temperature across models and MAGICC v7.6.0a3 ",
-      "percentiles (T33, T50, T67). For each scenario, two side-by-side boxplots show ",
-      "peak temperature (yellow) and temperature at 2100 (pink). ",
-      "Box spans Q33-Q67; whiskers extend to Q10-Q90, computed across all ",
-      "model x MAGICC-percentile combinations. ",
-      "Dotted black line marks 2.0 degrees C above pre-industrial levels. ",
+      "(b) Peak and end-of-century global mean surface temperature at the 67th percentile ",
+      "of the climate response, the likelihood convention used in assessments of remaining ",
+      "carbon budgets. ",
+      "Boxes show interquartile range and the horizontal line gives the cross-model median; ",
+      "whiskers extend to the most extreme of the model values; points show individual models. ",
+      "The dotted line marks 2.0\u00b0C above pre-industrial levels. ",
       "All climate diagnostics computed with MAGICC v7.6.0a3."
     )
   ),
@@ -67,7 +67,7 @@ CAPTIONS <- list(
       "Figure 3 | Economic impacts across PRISMA scenarios. ",
       "(a) Annual GDP relative to the Meet Aspirations scenario, 2020-2100. ",
       "Solid lines show undamaged GDP; dashed lines show damage-adjusted GDP using the ",
-      "Howard & Sterner damage function applied to the global mean surface temperature (T50). ",
+      "Howard & Sterner damage function applied to the global mean surface temperature (T67). ",
       "Bold black line denotes the cross-model mean. Only models with endogenous GDP are shown. ",
       "(b) Net Present Value (NPV) of GDP relative to Meet Aspirations, aggregated over ",
       "2020-2100, global totals. ",
@@ -90,7 +90,13 @@ CAPTIONS <- list(
       "3.1 wind electricity share scale-up (pp/decade); ",
       "3.2 solar electricity share scale-up (pp/decade); ",
       "4.1 total final energy demand decline (%/decade); ",
-      "5.1 global per-capita CO\u2082 emissions decline (%/decade)."
+      "5.1 global per-capita CO\u2082 emissions decline (%/decade). ",
+      "The final panel, on a grey background, is not part of the Brutschin et al. set: ",
+      "it reports the steepest annual decline in global CO\u2082 emissions reached in any ",
+      "decade (Gt CO\u2082 yr\u207b\u00b9), with a reference line at 2.23 Gt CO\u2082 yr\u207b\u00b9, ",
+      "the fall recorded in 2020 and the largest single-year decline observed. ",
+      "Dots above that line are shown in red and dots below it in green, as elsewhere, ",
+      "but the line is an observed reference rather than a Brutschin concern threshold."
     )
   ),
 
@@ -99,10 +105,9 @@ CAPTIONS <- list(
     text  = paste0(
       "Figure 5 | Energy transition indicators across PRISMA scenarios and clusters ",
       "(Late Reawakening excluded). ",
-      "(a) Renewable share (%) in primary energy supply. ",
-      "(b) Electricity share (%) in final energy demand. ",
-      "Bars show the cross-model median at 2030, 2040, and 2050; ",
-      "points show individual model values. ",
+      "(a) Wind and solar electricity share (% of total electricity generation) at 2030 and 2050. ",
+      "(b) Electricity share in final energy demand (%) at 2030 and 2050. ",
+      "Bars show the cross-model median; points show individual model values. ",
       "Labels on Shifted Ambition and Tech Momentum bars show the % change ",
       "in median relative to Meet Aspirations. ",
       "R10 regions summed within PRISMA cluster before computing shares. ",
@@ -113,8 +118,24 @@ CAPTIONS <- list(
   fig_sm2 = list(
     label = "Supplementary Figure SM2",
     text  = paste0(
-      "Supplementary Figure SM2 | Global surface temperature, cumulative carbon budget, ",
-      "effective radiative forcing, and CO2 emissions by PRISMA cluster. ",
+      "Supplementary Figure SM2 | CO2 and CH4 emissions by PRISMA cluster. ",
+      "(a) World CO2 emissions by PRISMA cluster, 2020-2100. ",
+      "Lines show the cross-model median within each cluster; ",
+      "ribbons span the model minimum to maximum. Units: Gt CO2/yr. ",
+      "(b) World CH4 emissions by PRISMA cluster, 2020-2100. ",
+      "Lines show the cross-model median within each cluster; ",
+      "ribbons span the model minimum to maximum. Units: Mt CH4/yr. ",
+      "R10 regions summed within PRISMA cluster (Transition Leaders, ",
+      "Diversifying Economies, Fossil-Dependent Economies). ",
+      "Free y-axis scale per cluster; only models reporting at R10 resolution included."
+    )
+  ),
+
+  fig_sm3 = list(
+    label = "Supplementary Figure SM3",
+    text  = paste0(
+      "Supplementary Figure SM3 | Global surface temperature, cumulative carbon budget, ",
+      "and effective radiative forcing. ",
       "(a) Global mean surface temperature (GSAT, T50 percentile) timeseries, 2020-2100. ",
       "Bold line = most-central model; ribbon = model min-max range. ",
       "(b) As (a) for the 67th-percentile temperature (T67). ",
@@ -124,23 +145,23 @@ CAPTIONS <- list(
       "(CO2-only): 400, 500, 1150, 1350 GtCO2. ",
       "(d) Effective Radiative Forcing, 2020-2100. ",
       "Lines show the cross-model median; ribbons span model minimum to maximum. ",
-      "(e) World CO2 emissions by PRISMA cluster, 2020-2100. ",
-      "Lines show the cross-model median within each cluster; ",
-      "ribbons span the model minimum to maximum. ",
       "All temperature and climate diagnostics computed with MAGICC v7.6.0a3."
     )
   ),
 
-  fig_sm3 = list(
-    label = "Supplementary Figure SM3",
+  fig_sm4 = list(
+    label = "Supplementary Figure SM4",
     text  = paste0(
-      "Supplementary Figure SM3 | Sensitivity of GDP Net Present Value to discount rate. ",
+      "Supplementary Figure SM4 | Sensitivity of GDP Net Present Value to discount rate. ",
       "NPV of GDP relative to the Meet Aspirations scenario (% of damage-adjusted Meet NPV) ",
-      "computed at discount rates of 1%, 2% (default, matching Figure 3b), 3%, and 4%. ",
-      "Each panel shows one non-Meet scenario; x-axis is the discount rate. ",
-      "Lines connect per-model median NPV (T50 surface temperature); ",
+      "computed at discount rates from 1% to 10% in steps of 0.5%, with 2% the default ",
+      "used in Figure 3b. Each panel shows one non-Meet scenario; x-axis is the discount rate. ",
+      "Lines connect per-model median NPV at the 67th percentile of the climate response ",
+      "(T67), as in the main text; ",
       "error bars span the Q10\u2013Q90 range of the Howard & Sterner damage uncertainty ",
-      "(5000 Monte Carlo draws). Only models with endogenous GDP are included. ",
+      "(5,000 Monte Carlo draws). The dotted vertical line marks the 2% default rate, ",
+      "and ✕ markers at zero give the interpolated rate at which each model's median NPV ",
+      "turns positive. Only models with endogenous GDP are included. ",
       "Damage function: D(T) = \u03b1\u00b7T^1.5 + \u03b2\u00b7T, ",
       "where \u03b1 and \u03b2 are OLS estimates from Howard & Sterner (2017)."
     )
@@ -149,13 +170,13 @@ CAPTIONS <- list(
   fig_sm6 = list(
     label = "Supplementary Figure SM6",
     text  = paste0(
-      "Supplementary Figure SM6 | GDP trajectories relative to Meet Aspirations, ",
+      "Supplementary Figure SM6 | GDP timeseries relative to Meet Aspirations, ",
       "disaggregated by PRISMA cluster and scenario. ",
       "Each panel shows annual GDP (% relative to cluster-level Meet Aspirations, 2020-2100) ",
-      "for one cluster (columns: Transition Leaders, Diversifying Economies, Fossil-Dependent) ",
+      "for one cluster (columns: Transition Leaders, Diversifying Economies, Fossil-Dependent Economies)",
       "and one scenario (rows). ",
       "Solid lines show undamaged GDP; dashed lines show damage-adjusted GDP ",
-      "using the Howard & Sterner damage function applied to the global T50 surface temperature. ",
+      "using the Howard & Sterner damage function applied to the global T67 surface temperature. ",
       "Only models with endogenous GDP are included. ",
       "Damage function: D(T) = alpha * T^1.5 + beta * T."
     )
@@ -164,7 +185,41 @@ CAPTIONS <- list(
   fig_sm7 = list(
     label = "Supplementary Figure SM7",
     text  = paste0(
-      "Supplementary Figure SM7 | Technology and socio-political feasibility ",
+      "Supplementary Figure SM7 | Economic impacts for the Late Reawakening scenario. ",
+      "Same format as Figure 3. ",
+      "(a) Annual GDP relative to Meet Aspirations, 2020-2100. ",
+      "Solid lines show undamaged GDP; dashed lines show damage-adjusted GDP using the ",
+      "Howard & Sterner damage function applied to the global mean surface temperature (T67). ",
+      "Only models with endogenous GDP are shown. ",
+      "(b) Net Present Value (NPV) of GDP relative to Meet Aspirations, aggregated over ",
+      "2020-2100, global totals. ",
+      "(c) NPV of GDP relative to Meet Aspirations by PRISMA cluster. ",
+      "Regional damages scaled with OECD LTM heterogeneity factors (Tol 2024, Eq. C11). ",
+      "Damage function: D(T) = alpha * T^1.5 + beta * T (Howard & Sterner)."
+    )
+  ),
+
+  fig_sm8 = list(
+    label = "Supplementary Figure SM8",
+    text  = paste0(
+      "Supplementary Figure SM8 | Economic impacts for the Tech Momentum scenario. ",
+      "Same format as Figure 3. ",
+      "(a) Annual GDP relative to Meet Aspirations, 2020-2100. ",
+      "Solid lines show undamaged GDP; dashed lines show damage-adjusted GDP using the ",
+      "Howard & Sterner damage function applied to the global mean surface temperature (T67). ",
+      "Only models with endogenous GDP are shown. ",
+      "(b) Net Present Value (NPV) of GDP relative to Meet Aspirations, aggregated over ",
+      "2020-2100, global totals. ",
+      "(c) NPV of GDP relative to Meet Aspirations by PRISMA cluster. ",
+      "Regional damages scaled with OECD LTM heterogeneity factors (Tol 2024, Eq. C11). ",
+      "Damage function: D(T) = alpha * T^1.5 + beta * T (Howard & Sterner)."
+    )
+  ),
+
+  fig_sm9 = list(
+    label = "Supplementary Figure SM9",
+    text  = paste0(
+      "Supplementary Figure SM9 | Technology and socio-political feasibility ",
       "indicators for three PRISMA scenarios. ",
       "(a) SSP2 - Meet Aspirations. ",
       "(b) SSP2 - Asymmetric Roll-Back (Shifted Ambition). ",
@@ -178,24 +233,13 @@ CAPTIONS <- list(
       "3.1 wind electricity share scale-up (pp/decade); ",
       "3.2 solar electricity share scale-up (pp/decade); ",
       "4.1 total final energy demand decline (%/decade); ",
-      "5.1 global per-capita CO\u2082 emissions decline (%/decade)."
-    )
-  ),
-
-  fig_sm8 = list(
-    label = "Supplementary Figure SM8",
-    text  = paste0(
-      "Supplementary Figure SM8 | Sensitivity of GDP NPV to the choice of damage function. ",
-      "Replicates Figure 3 panel (b) for all 9 Howard & Sterner (2025) damage functions. ",
-      "Rows: three non-Meet scenarios (Shifted Ambition, Late Reawakening, Tech Momentum). ",
-      "Columns: 9 H&S (2025) damage function specifications. ",
-      "x-axis: GSAT median (T50) and 67th percentile (T67). ",
-      "y-axis: NPV vs Meet Aspirations (% of damage-adjusted Meet NPV). ",
-      "Error bars show the q10-q90 Monte Carlo range (N=5000 draws) for functions 2-7; ",
-      "functions 1, 8, 9 use fixed coefficients and have no uncertainty band. ",
-      "Star (*) marks the preferred specification (fn6). ",
-      "Discount rate 2%, base year 2020. ",
-      "Damage function: Howard & Sterner (2025), Environ Resour Econ 88:3289-3327."
+      "5.1 global per-capita CO\u2082 emissions decline (%/decade). ",
+      "The final panel, on a grey background, is not part of the Brutschin et al. set: ",
+      "it reports the steepest annual decline in global CO\u2082 emissions reached in any ",
+      "decade (Gt CO\u2082 yr\u207b\u00b9), with a reference line at 2.23 Gt CO\u2082 yr\u207b\u00b9, ",
+      "the fall recorded in 2020 and the largest single-year decline observed. ",
+      "Dots above that line are shown in red and dots below it in green, as elsewhere, ",
+      "but the line is an observed reference rather than a Brutschin concern threshold."
     )
   ),
 

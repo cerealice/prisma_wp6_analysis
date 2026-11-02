@@ -78,14 +78,14 @@ cluster_map <- c(
   "Europe (R10)"               = "Transition Leaders",
   "India+ (R10)"               = "Diversifying Economies",
   "Latin America (R10)"        = "Diversifying Economies",
-  "Middle East (R10)"          = "Fossil-Dependent",
+  "Middle East (R10)"          = "Fossil-Dependent Economies",
   "North America (R10)"        = "Diversifying Economies",
   "Other (R10)"                = "Diversifying Economies",
   "Pacific OECD (R10)"         = "Transition Leaders",
-  "Reforming Economies (R10)"  = "Fossil-Dependent",
+  "Reforming Economies (R10)"  = "Fossil-Dependent Economies",
   "Rest of Asia (R10)"         = "Diversifying Economies"
 )
-cluster_order <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent")
+cluster_order <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent Economies")
 
 # ── Model short names ──────────────────────────────────────────
 model_short_names <- c(
@@ -257,6 +257,17 @@ if (nrow(gdp_all) == 0 && nrow(gdp_r10_all) > 0) {
     mutate(region = "World")
 }
 
+# ── R10 Population (for OECD LTM per-capita income) ──────────
+run_python_download("Population", "pop_r10", r10_regions)
+pop_r10_raw <- tryCatch(
+  load_pq("pop_r10") %>%
+    filter(variable == "Population", region %in% r10_regions),
+  error = function(e) {
+    message("Population data unavailable \u2014 OECD scale_i will be set to 1.")
+    NULL
+  }
+)
+
 # ── GSAT ───────────────────────────────────────────────────────
 ca_backup_dir <- file.path(project_dir, "data", "climate_assessment")
 ca_files <- list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
@@ -359,7 +370,7 @@ for (mod in use_models) {
       web_gsat %>% filter(year %in% gdp_years_std) %>% mutate(scenario = as.character(scenario)),
       by = c("model", "scenario", "year")
     ) %>%
-    mutate(gdp_v1 = value * (1 - damage_fn(p50) / 100))
+    mutate(gdp_v1 = value * (1 - damage_fn(p67) / 100))
 
   message("  [diag] ", mod, ": joined=", nrow(joined),
           " joined_scens=", paste(unique(joined$scenario), collapse="|"))
@@ -473,47 +484,217 @@ results_w <- bind_rows(results_list_w) %>%
 
 # ══════════════════════════════════════════════════════════════
 # 5. CLUSTER NPV DATA  (panel c)
+#    H&S MC uncertainty downscaled by OECD LTM C11 regional ratios
+#    (Guillemette 2025, OECD Economic Policy Papers No. 36, Annex C)
+#
+#    θ_i     = -0.0182*(ycap_i − ycap_w) + 0.0037*(T̄_i − T̄_w)
+#    scale_i = (0.010038 + θ_i / 6.25) / 0.010038          [C11 regional ratio]
+#
+#    Regional damage^k = H&S_mc_k(T) × scale_i
+#      → MC uncertainty from H&S α/β draws; regional heterogeneity from C11
+#
+#    Cluster-level damaged GDP:
+#      GDP_dam^k = GDP_total - H&S_mc_k(T)/100 × GDP_scaled
+#    where GDP_scaled = Σ_i scale_i × GDP_i
+#
+#    Assumptions
+#    ─────────────────────────────────────────────────────────
+#    • ycap_i  = log(GDP|PPP per capita) at REF_YEAR 2015, Meet Aspirations
+#      (time-invariant: reference-year calibration, not projected)
+#    • T̄_i    = population-weighted annual-mean temperature per R10 (2015)
+#    • World averages are GDP|PPP-weighted across available R10 regions
+#    • Global MAGICC GSAT used for all regions (no regional warming pattern)
 # ══════════════════════════════════════════════════════════════
+
+# ── Baseline temperatures by R10 (population-weighted annual mean, 2015) ───────
+# Source: Gortan et al. (2024), "A unified repository for pre-processed climate
+#   data weighted by gridded economic activity", Scientific Data 11, 533.
+#   CRU TS v4, population weights (2015 census), monthly data averaged to annual.
+#   R10 aggregation: country-level values weighted by 2015 World Bank population.
+#   Script: scripts/compute_r10_temps.py
+# "Other (R10)" has no matching countries in GADM0 → NA (scale_i defaults to 1).
+r10_baseline_temp <- c(
+  "Africa (R10)"              = 23.82,
+  "China+ (R10)"              = 15.38,
+  "Europe (R10)"              = 12.03,
+  "India+ (R10)"              = 25.55,
+  "Latin America (R10)"       = 21.92,
+  "Middle East (R10)"         = 21.32,
+  "North America (R10)"       = 13.87,
+  "Other (R10)"               = 19.5,        # no GADM0 match; retained from prior estimate
+  "Pacific OECD (R10)"        = 14.69,
+  "Reforming Economies (R10)" =  8.80,
+  "Rest of Asia (R10)"        = 26.79
+)
+
+REF_YEAR <- 2015L   # reference year for ycap calibration
+
+# ── OECD θ_i and scale_i per model × R10 region ────────────────
+#   θ_i     = -0.0182*(ycap_i − ycap_w) + 0.0037*(T̄_i − T̄_w)
+#   scale_i = (0.010038 + θ_i / 6.25) / 0.010038
+#   Regional damage = H&S_global(T) × scale_i
+#   (H&S MC uncertainty downscaled by C11 regional ratio)
+compute_oecd_scale <- function(mod) {
+  default_scales <- tibble(region = r10_regions, theta_i = 0.0, scale_i = 1.0)
+
+  gdp_ref <- gdp_ppp_r10_raw %>%
+    filter(as.character(model) == mod,
+           as.character(scenario) == ma_scen,
+           year == REF_YEAR, region %in% r10_regions, !is.na(value)) %>%
+    select(region, gdp_ppp = value)
+
+  if (nrow(gdp_ref) == 0) {
+    message("  OECD scale: no GDP|PPP for ", mod, " at ", REF_YEAR,
+            " \u2014 scale_i = 1 (uniform)")
+    return(default_scales)
+  }
+
+  pop_ref <- if (!is.null(pop_r10_raw) && nrow(pop_r10_raw) > 0) {
+    tmp <- pop_r10_raw %>%
+      filter(as.character(model) == mod,
+             as.character(scenario) == ma_scen,
+             year == REF_YEAR, region %in% r10_regions, !is.na(value)) %>%
+      select(region, pop = value)
+    if (nrow(tmp) == 0) {
+      tmp <- pop_r10_raw %>%
+        filter(as.character(scenario) == ma_scen,
+               year == REF_YEAR, region %in% r10_regions, !is.na(value)) %>%
+        group_by(region) %>%
+        summarise(pop = mean(value, na.rm = TRUE), .groups = "drop")
+      if (nrow(tmp) > 0)
+        message("  OECD scale: using cross-model mean population for ", mod)
+    }
+    tmp
+  } else tibble(region = character(0), pop = numeric(0))
+
+  if (nrow(pop_ref) == 0) {
+    message("  OECD scale: no population for ", mod, " \u2014 scale_i = 1 (uniform)")
+    return(default_scales)
+  }
+
+  r10_base <- gdp_ref %>%
+    inner_join(pop_ref, by = "region") %>%
+    mutate(
+      region    = as.character(region),
+      avgtemp_i = r10_baseline_temp[region],
+      ycap_i    = log(gdp_ppp / pop * 1000)
+    ) %>%
+    filter(!is.na(avgtemp_i), is.finite(ycap_i), pop > 0)
+
+  if (nrow(r10_base) < 3) {
+    message("  OECD scale: too few regions for ", mod, " \u2014 scale_i = 1 (uniform)")
+    return(default_scales)
+  }
+
+  total_gdp   <- sum(r10_base$gdp_ppp)
+  wld_ycap    <- sum(r10_base$ycap_i    * r10_base$gdp_ppp) / total_gdp
+  wld_avgtemp <- sum(r10_base$avgtemp_i * r10_base$gdp_ppp) / total_gdp
+
+  r10_base <- r10_base %>%
+    mutate(
+      theta_i = -0.0182 * (ycap_i - wld_ycap) + 0.0037 * (avgtemp_i - wld_avgtemp),
+      scale_i = (0.010038 + theta_i / 6.25) / 0.010038
+    )
+
+  message("  OECD scale for ", short_name(mod), ": ",
+          paste(sprintf("%s=%.3f", r10_base$region, r10_base$scale_i), collapse = ", "))
+
+  default_scales %>%
+    left_join(r10_base %>% select(region, theta_new = theta_i, scale_new = scale_i),
+              by = "region") %>%
+    mutate(theta_i = if_else(!is.na(theta_new), theta_new, theta_i),
+           scale_i = if_else(!is.na(scale_new), scale_new, scale_i)) %>%
+    select(region, theta_i, scale_i)
+}
+
+oecd_scale_list <- setNames(lapply(use_models, compute_oecd_scale), use_models)
+
+# ── Cluster NPV MC loop — H&S uncertainty × C11 scale_i ─────────
+#   damage_i^k = H&S_mc_k(T) × scale_i   (MC uncertainty, C11 regional ratio)
+#   GDP_dam_cluster^k = GDP_total - H&S_mc_k/100 × GDP_scaled
+#   where GDP_scaled = Σ_i scale_i × GDP_i
 results_list_cl <- list()
 
 for (mod in use_models) {
-  message("Cluster NPV: ", mod)
-  web_gsat <- web_gsat_all %>% filter(model == mod)
-  gdp_cl   <- gdp_cluster_all %>% filter(model == mod) %>% fill_sparse_cl()
-  if (nrow(web_gsat) == 0 || nrow(gdp_cl) == 0) next
+  message("Cluster NPV (H&S MC × C11 scale): ", mod)
+  web_gsat  <- web_gsat_all %>% filter(model == mod)
+  gdp_r10_m <- gdp_r10_all  %>% filter(as.character(model) == mod)
+  scale_df  <- oecd_scale_list[[mod]]
+
+  if (nrow(web_gsat) == 0 || nrow(gdp_r10_m) == 0) next
 
   ann_y <- seq(BASE_YEAR, 2100L)
   disc  <- 1 / (1 + DEFAULT_DISC)^(ann_y - BASE_YEAR)
-  gm <- web_gsat %>% filter(scenario == ma_scen) %>% arrange(year)
+  gm    <- web_gsat %>% filter(scenario == ma_scen) %>% arrange(year)
   if (nrow(gm) < 2) next
   Tm50 <- pmax(approx(gm$year, gm$p50, xout = ann_y, rule = 2)$y, 0)
   Tm67 <- pmax(approx(gm$year, gm$p67, xout = ann_y, rule = 2)$y, 0)
 
+  # Meet H&S MC damage matrices (global GSAT, shared across clusters)
+  dam_m50 <- outer(Tm50^1.5, mc_alpha_draws) + outer(Tm50, mc_beta_draws)
+  dam_m67 <- outer(Tm67^1.5, mc_alpha_draws) + outer(Tm67, mc_beta_draws)
+
   mod_rows <- bind_rows(lapply(cluster_order, function(cl) {
-    meet_cl <- gdp_cl %>% filter(scenario == ma_scen, cluster == cl) %>% arrange(year)
-    if (nrow(meet_cl) < 2) return(NULL)
-    gdp_m        <- approx(meet_cl$year, meet_cl$value, xout = ann_y, rule = 2)$y
-    meet_npv_raw <- sum(gdp_m * disc)
+    cl_regions <- names(cluster_map)[cluster_map == cl & names(cluster_map) %in% r10_regions]
+
+    # Meet Aspirations: total GDP and scale-weighted GDP
+    gdp_total_m  <- numeric(length(ann_y))
+    gdp_scaled_m <- numeric(length(ann_y))
+    for (rg in cl_regions) {
+      sc_i <- scale_df$scale_i[scale_df$region == rg]
+      if (!length(sc_i) || !is.finite(sc_i)) sc_i <- 1.0
+      rg_d <- gdp_r10_m %>%
+        filter(as.character(scenario) == ma_scen, region == rg) %>% arrange(year)
+      if (nrow(rg_d) < 2) next
+      v <- approx(rg_d$year, rg_d$value, xout = ann_y, rule = 2)$y
+      gdp_total_m  <- gdp_total_m  + v
+      gdp_scaled_m <- gdp_scaled_m + sc_i * v
+    }
+    if (all(gdp_total_m == 0)) return(NULL)
+
+    meet_npv_raw <- sum(gdp_total_m * disc)
     if (!is.finite(meet_npv_raw) || meet_npv_raw == 0) return(NULL)
+
+    # GDP_dam^k = GDP_total - H&S_mc_k/100 × GDP_scaled
+    gmc_m50 <- matrix(gdp_total_m, nrow = length(ann_y), ncol = N_MC) -
+      sweep(dam_m50 / 100, 1, gdp_scaled_m, `*`)
+    gmc_m67 <- matrix(gdp_total_m, nrow = length(ann_y), ncol = N_MC) -
+      sweep(dam_m67 / 100, 1, gdp_scaled_m, `*`)
+    meet_npv_dam50 <- colSums(sweep(gmc_m50, 1, disc, `*`))
+    meet_npv_dam67 <- colSums(sweep(gmc_m67, 1, disc, `*`))
+
     bind_rows(lapply(scens_nonmeet, function(scen) {
-      sc <- gdp_cl %>% filter(scenario == scen, cluster == cl) %>% arrange(year)
-      gs <- web_gsat %>% filter(scenario == scen) %>% arrange(year)
-      if (nrow(sc) < 2 || nrow(gs) < 2) return(NULL)
-      gdp_s       <- approx(sc$year, sc$value, xout = ann_y, rule = 2)$y
-      npv_raw_pct <- (sum(gdp_s * disc) - meet_npv_raw) / meet_npv_raw * 100
+      gs <- web_gsat %>% filter(as.character(scenario) == scen) %>% arrange(year)
+      if (nrow(gs) < 2) return(NULL)
       Ts50 <- pmax(approx(gs$year, gs$p50, xout = ann_y, rule = 2)$y, 0)
       Ts67 <- pmax(approx(gs$year, gs$p67, xout = ann_y, rule = 2)$y, 0)
-      mc_npv <- function(T_s, T_m) {
-        dam_s <- outer(T_s^1.5, mc_alpha_draws) + outer(T_s, mc_beta_draws)
-        dam_m <- outer(T_m^1.5, mc_alpha_draws) + outer(T_m, mc_beta_draws)
-        gmc_s <- sweep(1 - dam_s / 100, 1, gdp_s, `*`)
-        gmc_m <- sweep(1 - dam_m / 100, 1, gdp_m, `*`)
-        # Per-draw damage-adjusted Meet NPV as the denominator (see panel b).
-        meet_npv_dam <- colSums(sweep(gmc_m, 1, disc, `*`))
-        colSums(sweep(gmc_s - gmc_m, 1, disc, `*`)) / meet_npv_dam * 100
+      dam_s50 <- outer(Ts50^1.5, mc_alpha_draws) + outer(Ts50, mc_beta_draws)
+      dam_s67 <- outer(Ts67^1.5, mc_alpha_draws) + outer(Ts67, mc_beta_draws)
+
+      gdp_total_s  <- numeric(length(ann_y))
+      gdp_scaled_s <- numeric(length(ann_y))
+      for (rg in cl_regions) {
+        sc_i <- scale_df$scale_i[scale_df$region == rg]
+        if (!length(sc_i) || !is.finite(sc_i)) sc_i <- 1.0
+        rg_d <- gdp_r10_m %>%
+          filter(as.character(scenario) == scen, region == rg) %>% arrange(year)
+        if (nrow(rg_d) < 2) next
+        v <- approx(rg_d$year, rg_d$value, xout = ann_y, rule = 2)$y
+        gdp_total_s  <- gdp_total_s  + v
+        gdp_scaled_s <- gdp_scaled_s + sc_i * v
       }
-      mc_v1 <- mc_npv(Ts50, Tm50)
-      mc_v3 <- mc_npv(Ts67, Tm67)
+      if (all(gdp_total_s == 0)) return(NULL)
+
+      npv_raw_pct <- (sum(gdp_total_s * disc) - meet_npv_raw) / meet_npv_raw * 100
+
+      gmc_s50 <- matrix(gdp_total_s, nrow = length(ann_y), ncol = N_MC) -
+        sweep(dam_s50 / 100, 1, gdp_scaled_s, `*`)
+      gmc_s67 <- matrix(gdp_total_s, nrow = length(ann_y), ncol = N_MC) -
+        sweep(dam_s67 / 100, 1, gdp_scaled_s, `*`)
+
+      mc_v1 <- colSums(sweep(gmc_s50 - gmc_m50, 1, disc, `*`)) / meet_npv_dam50 * 100
+      mc_v3 <- colSums(sweep(gmc_s67 - gmc_m67, 1, disc, `*`)) / meet_npv_dam67 * 100
+
       tibble(scenario = scen, cluster = cl,
              npv_raw_pct = npv_raw_pct,
              q10_v1_pct  = quantile(mc_v1, 0.10),
@@ -524,6 +705,7 @@ for (mod in use_models) {
              q90_v3_pct  = quantile(mc_v3, 0.90))
     }))
   }))
+
   if (!is.null(mod_rows) && nrow(mod_rows) > 0)
     results_list_cl[[mod]] <- mod_rows %>%
       mutate(model = mod, model_short = short_name(mod))
@@ -571,7 +753,7 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
     scale_linetype_manual(
       values = c("Undamaged GDP" = "solid", "Damage-adjusted GDP" = "dashed"),
       labels = c("Undamaged GDP"     = "Undamaged GDP",
-                 "Damage-adjusted GDP" = "Damage-adjusted\nGDP for T50"),
+                 "Damage-adjusted GDP" = "Damage-adjusted\nGDP for T67"),
       name   = NULL
     ) +
     scale_x_continuous(breaks = seq(2020, 2100, 20)) +
@@ -631,7 +813,7 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
     coord_cartesian(ylim = pb_ylim) +
     labs(
       title = "(b) GDP NPV global level",
-      x = NULL, y = "NPV vs Meet Aspirations (% of damage-adjusted Meet NPV)"
+      x = NULL, y = "NPV vs Meet Aspirations\n(% of damage-adjusted Meet NPV)"
     ) +
     guides(colour = "none") +
     theme(legend.position = "none",
@@ -679,7 +861,7 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
                        expand = expansion(add = 0.55)) +
     labs(
       title = "(c) GDP NPV by regional cluster",
-      x = NULL, y = "NPV vs Meet Aspirations (% of cluster damage-adjusted Meet NPV)"
+      x = NULL, y = "NPV vs Meet Aspirations\n(% of cluster damage-adjusted Meet NPV)"
     ) +
     guides(colour = "none") +
     theme(legend.position = "none",
@@ -706,7 +888,7 @@ pb_ypad <- diff(pb_raw) * 0.08
 pb_ylim <- pb_raw + c(-pb_ypad, pb_ypad)
 
 make_figure("SSP2 - Asymmetric Roll-Back", "Shifted Ambition", "fig3.png",    pb_ylim)
-make_figure("SSP2 - Late Reawakening",     "Late Reawakening", "fig_sm6.png", pb_ylim)
+make_figure("SSP2 - Late Reawakening",     "Late Reawakening", "fig_sm7.png", pb_ylim)
 make_figure("SSP2 - Staying Alive",        "Tech Momentum",    "fig_sm8.png", pb_ylim)
 
 # ── Update figure captions Word document ──────────────────────

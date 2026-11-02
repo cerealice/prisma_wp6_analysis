@@ -40,7 +40,10 @@ BASELINE_SCEN <- "SSP2 - Meet Aspirations"
 TARGET_SCEN   <- "SSP2 - Late Reawakening"
 CP_DISCOUNT   <- 0.05
 
-SELECTED_INDICATORS <- c("2.1", "3.1", "3.2", "4.1", "5.1")
+SELECTED_INDICATORS <- c("2.1", "3.1", "3.2", "4.1", "5.1", "P1")
+
+# Largest single-year fall in global CO2 on record: 2020 pandemic shutdown.
+COVID_DECLINE <- 2.23
 
 dec_end <- seq(2030, 2100, by = 10)
 need    <- function(ids) is.null(SELECTED_INDICATORS) || any(SELECTED_INDICATORS %in% ids)
@@ -64,12 +67,16 @@ model_short_names <- c(
 )
 short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_names[x], x)
 
-# Dimension strip colours
+# Dimension strip colours.
+# The first four are the Brutschin et al. dimensions. "Transition pace"
+# is not one of theirs, so it gets a neutral grey strip to keep the
+# distinction visible at a glance.
 dim_palette <- c(
-  "Economic"       = "#FFF0D9",
-  "Technological"  = "#DDE8F5",
-  "Socio-cultural" = "#EDE8F5",
-  "Institutional"  = "#F5DDE8"
+  "Economic"         = "#FFF0D9",
+  "Technological"    = "#DDE8F5",
+  "Socio-cultural"   = "#EDE8F5",
+  "Institutional"    = "#F5DDE8",
+  "Transition pace"  = "#DCDCDC"
 )
 
 # ── Python download wrapper ────────────────────────────────────
@@ -248,6 +255,26 @@ indicators <- list(
          pc  <- setNames(co_w / po_w, YEARS)
          v   <- 100 * (at(pc, dec_end - 10) - at(pc, dec_end)) / at(pc, dec_end - 10)
          list(value = v, level = lvl(v, 10, 20))
+       }),
+
+  # ── Not a Brutschin et al. indicator ────────────────────────
+  # Steepest annualised fall in global CO2 within each decade.
+  # World CO2 is the sum over the R10 regions, as in 5.1 above.
+  # Reference level: the 2020 pandemic fall, the largest on record.
+  list(id = "P1", dim = "Transition pace", name = "Max annual CO₂ decline",
+       unit = "Gt CO₂/yr", med = COVID_DECLINE, high = COVID_DECLINE,
+       fn = function(m, s) {
+         if (is.null(reg_raw)) return(na_res())
+         co_mat <- sapply(r10_regions, function(r) get_series(reg_raw, m, s, "Emissions|CO2", region = r))
+         co_w   <- rowSums(co_mat, na.rm = TRUE)
+         co_w[co_w == 0] <- NA_real_
+         co_gt  <- setNames(co_w / 1000, YEARS)          # Mt -> Gt
+         slope  <- setNames(c(NA_real_, -diff(co_gt)), YEARS)
+         v <- sapply(dec_end, function(y) {
+           w <- slope[as.character((y - 9):y)]
+           if (all(is.na(w))) NA_real_ else max(w, na.rm = TRUE)
+         })
+         list(value = v, level = lvl(v, COVID_DECLINE, COVID_DECLINE))
        })
 )
 names(indicators) <- sapply(indicators, "[[", "id")
@@ -312,9 +339,14 @@ ind_meta_dot <- tibble(
   high = sapply(indicators, "[[", "high")
 ) %>%
   mutate(
-    thr_txt     = if_else(id == "2.1",
-                          "H \u2265 5\u00d7",
-                          paste0("M \u2265 ", med, " \u00b7 H \u2265 ", high)),
+    thr_txt     = case_when(
+      id == "P1"  ~ "",
+      id == "2.1" ~ "H \u2265 5\u00d7",
+      TRUE        ~ paste0("M \u2265 ", med, " \u00b7 H \u2265 ", high)
+    ),
+    thr_lab     = if_else(id == "P1",
+                          paste0(COVID_DECLINE, " Gt/yr"),
+                          paste0("H: ", high)),
     strip_label = paste0(name, "\n(", unit, ")\n", thr_txt),
     strip_label = factor(strip_label, levels = strip_label)  # lock order
   )
@@ -342,15 +374,25 @@ dot_df <- cell_lr %>%
 
 # Threshold data frames for geom_hline
 thresh_high_df <- ind_meta_dot %>%
-  select(strip_label, thr_val = high)
+  select(strip_label, thr_val = high, thr_lab)
 
 thresh_med_df <- ind_meta_dot %>%
   filter(id != "2.1", med != high) %>%   # skip 2.1 (single threshold)
   select(strip_label, thr_val = med)
 
 # Model shapes
-shape_vals <- c(15, 16, 17, 18, 8, 1, 0, 2, 5, 6, 3, 4)
+shape_vals <- c(15, 16, 17, 18, 4, 1, 0, 2, 5, 6, 3, 8)
 shape_vec  <- setNames(shape_vals[seq_along(mod_order)], mod_order)
+
+# Axis labels carry the model's own marker, so no legend is needed.
+shape_glyphs <- c("15" = "■", "16" = "●", "17" = "▲",
+                  "18" = "◆", "8"  = "*",      "1"  = "○",
+                  "0"  = "□", "2"  = "△", "5"  = "◇",
+                  "6"  = "▽", "3"  = "+",      "4"  = "×")
+mod_labels <- setNames(
+  paste0(shape_glyphs[as.character(shape_vec)], "  ", names(shape_vec)),
+  names(shape_vec)
+)
 
 # ── Build ggplot ───────────────────────────────────────────────
 p_dot <- ggplot(dot_df, aes(x = model_short, y = value)) +
@@ -372,7 +414,7 @@ p_dot <- ggplot(dot_df, aes(x = model_short, y = value)) +
              linetype = "dotted", linewidth = 0.9, colour = "#C94040",
              inherit.aes = FALSE) +
   geom_text(data = thresh_high_df,
-            aes(x = -Inf, y = thr_val, label = paste0("H: ", thr_val)),
+            aes(x = -Inf, y = thr_val, label = thr_lab),
             hjust = -0.15, vjust = -0.45, size = 5.5,
             colour = "#C94040", fontface = "italic",
             inherit.aes = FALSE) +
@@ -390,26 +432,26 @@ p_dot <- ggplot(dot_df, aes(x = model_short, y = value)) +
 
   facet_wrap(~ strip_label, nrow = 1, scales = "free_y") +
   scale_colour_identity() +
-  scale_shape_manual(values = shape_vec, name = "Model") +
-  scale_y_continuous(expand = expansion(mult = c(0.10, 0.22))) +
+  scale_shape_manual(values = shape_vec, guide = "none") +
+  scale_x_discrete(labels = mod_labels) +
+  scale_y_continuous(expand = expansion(mult = c(0.26, 0.22))) +
   labs(
-    title = "Brutschin et al. (2021, Table 1) feasibility indicators for Late Reawakening",
+    title = paste0("Feasibility indicators for Late Reawakening: Brutschin et al. ",
+                   "(2021, Table 1) on the left, maximum annual CO₂ decline on the right"),
     x     = NULL,
     y     = "Value (worst decade)"
   ) +
-  guides(shape = guide_legend(ncol = 1, override.aes = list(size = 3.5))) +
   theme_bw(base_size = 17, base_family = "Arial") +
   theme(
-    plot.title         = element_text(size = 18, face = "bold"),
+    plot.title         = element_text(size = 17, face = "bold"),
     axis.text.x        = element_text(size = 14, angle = 35, hjust = 1),
     axis.text.y        = element_text(size = 14),
     strip.text         = element_text(size = 14, face = "bold", lineheight = 1.2),
     strip.background   = element_blank(),
     panel.grid.minor   = element_blank(),
     panel.grid.major.x = element_blank(),
-    legend.position    = "right",
-    legend.title       = element_text(size = 14),
-    legend.text        = element_text(size = 13)
+    panel.spacing.x    = unit(1.6, "lines"),   # room for the divider
+    legend.position    = "none"
   )
 
 # ── Colour strip backgrounds by dimension ─────────────────────
@@ -430,10 +472,30 @@ for (i in seq_along(strip_idx)) {
   grob$grobs[[strip_idx[i]]] <- panel_grob
 }
 
+# ── Divider before the panel that is not a Brutschin indicator ─
+local({
+  pan <- grob$layout[grepl("^panel", grob$layout$name), ]
+  pan <- pan[order(pan$l), ]
+  if (nrow(pan) < 2) return(invisible(NULL))
+  # The column immediately left of the last panel holds its axis. Drawing
+  # at x = 0 of that column puts the line on the boundary with the panel
+  # spacer, so the widened spacing shows as clear air to its left.
+  gap_col <- pan$l[nrow(pan)] - 1
+  strip_t <- grob$layout$t[grepl("^strip-t", grob$layout$name)]
+  top_row <- if (length(strip_t)) min(strip_t) else min(pan$t)
+  grob <<- gtable::gtable_add_grob(
+    grob,
+    grid::linesGrob(x = unit(c(-0.3, -0.3), "npc"), y = unit(c(0, 1), "npc"),
+                    gp = grid::gpar(col = "grey35", lwd = 1.8)),
+    t = top_row, b = max(pan$b), l = gap_col, r = gap_col,
+    z = Inf, clip = "off", name = "pace-divider"
+  )
+})
+
 n_inds   <- nrow(ind_meta_dot)
 out_file <- file.path(graphs_dir, "fig4.png")
 ggsave(out_file, grob,
-       width  = 2.9 * n_inds + 2.8,
+       width  = 2.9 * n_inds + 1.2,
        height = 6.5,
        dpi    = 300)
 message("Saved: ", out_file)

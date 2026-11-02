@@ -1,33 +1,18 @@
 library(tidyverse)
 library(arrow)
+library(patchwork)
 library(jsonlite)
 
 # ══════════════════════════════════════════════════════════════
 # PURPOSE — post-Oct-15 supplementary figure SM3
-#   GDP NPV sensitivity to discount rate — T_median (p50) only.
-#   Panel (b) style from fig2.R replicated at four discount
-#   rates (1 %–4 %).  x-axis = discount rate.
-#   3 subplots (columns), one per non-Meet scenario.
+#
+#   (a) T_median (p50) timeseries by scenario
+#   (b) T_67th   (p67) timeseries by scenario  [same y axis as (a)]
+#   (c) Cumulative CO₂ from 2020
+#   (d) Effective Radiative Forcing
 #
 # Output: graphs/fig_sm3.png
 # ══════════════════════════════════════════════════════════════
-
-# ── Constants ──────────────────────────────────────────────────
-CAT_WEIGHT    <- 0.621
-GROWTH_WEIGHT <- 0.602
-ALPHA_C       <- 0.622 + 1.775 * CAT_WEIGHT
-BETA_C        <- 1.997 * GROWTH_WEIGHT
-SE_ALPHA_C    <- sqrt(0.265^2 + (CAT_WEIGHT * 1.858)^2)
-SE_BETA_C     <- GROWTH_WEIGHT * 1.130
-N_MC          <- 5000L
-BASE_YEAR     <- 2020L
-ENDOGENOUS_THRESHOLD <- 0.005
-
-DISC_RATES  <- c(0.01, 0.02, 0.03, 0.04)
-DISC_LABELS <- c("1%", "2%\n(default)", "3%", "4%")
-
-damage_fn <- function(T, alpha = ALPHA_C, beta = BETA_C)
-  alpha * pmax(T, 0)^1.5 + beta * pmax(T, 0)
 
 # ── Paths ──────────────────────────────────────────────────────
 wd          <- normalizePath(".", winslash = "/", mustWork = TRUE)
@@ -45,55 +30,64 @@ if (!exists("DOWNLOAD_DATA", inherits = FALSE)) DOWNLOAD_DATA <- TRUE
 # ── Scenarios ──────────────────────────────────────────────────
 scenarios <- c(
   "SSP2 - Meet Aspirations",
-  "SSP2 - Asymmetric Roll-Back",
   "SSP2 - Late Reawakening",
-  "SSP2 - Staying Alive"
+  "SSP2 - Staying Alive",
+  "SSP2 - Asymmetric Roll-Back"
 )
-ma_scen       <- "SSP2 - Meet Aspirations"
-scens_nonmeet <- c(
-  "SSP2 - Asymmetric Roll-Back",
-  "SSP2 - Late Reawakening",
-  "SSP2 - Staying Alive"
-)
-scen_labels <- c(
-  "SSP2 - Asymmetric Roll-Back" = "Shifted Ambition",
+ma_scen         <- "SSP2 - Meet Aspirations"
+scen_plot_order <- scenarios
+
+scenario_labels <- c(
+  "SSP2 - Meet Aspirations"     = "Meet Aspirations",
   "SSP2 - Late Reawakening"     = "Late Reawakening",
-  "SSP2 - Staying Alive"        = "Tech Momentum"
+  "SSP2 - Staying Alive"        = "Tech Momentum",
+  "SSP2 - Asymmetric Roll-Back" = "Shifted Ambition"
 )
-
-gdp_years_std <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
-
-# ── Model short names ──────────────────────────────────────────
-model_short_names <- c(
-  "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
-  "IMAGE 3.4"                          = "IMAGE",
-  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
-  "OPEN-PROM 2.2"                      = "OPEN-PROM",
-  "REMIND-MAgPIE 3.6-4.14"            = "REMIND 3.6",
-  "REMIND-MAgPIE 3.7-4.14"            = "REMIND 3.7",
-  "WITCH 6.0"                          = "WITCH"
+scen_col_ssp2 <- c(
+  "SSP2 - Meet Aspirations"     = "#5BB85C",
+  "SSP2 - Late Reawakening"     = "#D62728",
+  "SSP2 - Staying Alive"        = "#87CEEB",
+  "SSP2 - Asymmetric Roll-Back" = "#999999"
 )
-short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_names[x], x)
+scen_col_lbl    <- setNames(unname(scen_col_ssp2), unname(scenario_labels))
+scen_lbl_levels <- unname(scenario_labels[scen_plot_order])
+
+# ── Regions ────────────────────────────────────────────────────
+r10_regions <- c(
+  "Africa (R10)", "China+ (R10)", "Europe (R10)", "India+ (R10)",
+  "Latin America (R10)", "Middle East (R10)", "North America (R10)",
+  "Other (R10)", "Pacific OECD (R10)", "Reforming Economies (R10)",
+  "Rest of Asia (R10)"
+)
+all_regions <- c("World", r10_regions)
 
 # ── Theme ──────────────────────────────────────────────────────
 theme_set(
-  theme_bw(base_size = 15, base_family = "Arial") +
+  theme_bw(base_size = 20, base_family = "Arial") +
     theme(
-      plot.title         = element_text(size = 17.0, face = "bold"),
-      plot.caption       = element_text(size = 11.5, colour = "black", hjust = 0),
-      axis.title         = element_text(size = 13.6),
-      axis.text          = element_text(size = 12.4),
-      strip.background   = element_blank(),
-      strip.text         = element_text(size = 14.3, face = "bold"),
-      panel.grid.minor   = element_blank(),
-      panel.grid.major.x = element_blank(),
-      legend.title       = element_text(size = 13.6),
-      legend.text        = element_text(size = 13.0)
+      plot.title       = element_text(size = 20.0, face = "bold", hjust = 0.5),
+      plot.subtitle    = element_text(size = 15.0, colour = "grey35", lineheight = 1.3),
+      axis.title       = element_text(size = 18.5),
+      axis.text        = element_text(size = 17.0),
+      axis.text.x      = element_text(angle = 45, hjust = 1),
+      strip.background = element_blank(),
+      strip.text       = element_text(size = 18.5, face = "bold"),
+      panel.grid.minor = element_blank(),
+      legend.title     = element_text(size = 17.0),
+      legend.text      = element_text(size = 16.5),
+      plot.caption     = element_text(size = 14.5, colour = "grey50", hjust = 0)
     )
 )
 
-# ── Download / load helpers ────────────────────────────────────
+# ── MAGICC variables ───────────────────────────────────────────
+MAGICC_TAG <- "[MAGICC v7.6.0a3]"
+ca_vars <- c(
+  paste0("Climate Assessment|Surface Temperature (GSAT)|33rd Percentile ", MAGICC_TAG),
+  paste0("Climate Assessment|Surface Temperature (GSAT)|Median ",          MAGICC_TAG),
+  paste0("Climate Assessment|Surface Temperature (GSAT)|67th Percentile ", MAGICC_TAG)
+)
+
+# ── Python / parquet helpers ───────────────────────────────────
 miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
 env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
 python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
@@ -137,7 +131,6 @@ load_pq <- function(prefix) {
   pat   <- paste0("^", prefix, "_.*\\.parquet$")
   files <- list.files(direct_dir, pat, full.names = TRUE)
   files <- files[!grepl("_meta\\.parquet$", files)]
-  # Fallback to committed backup data if no fresh download available
   if (length(files) == 0) {
     backup_dir <- file.path(project_dir, "data", "backup")
     files <- list.files(backup_dir, pat, full.names = TRUE)
@@ -149,243 +142,352 @@ load_pq <- function(prefix) {
   read_parquet(files[which.max(file.info(files)$mtime)])
 }
 
-fill_sparse_w <- function(df) {
+# ── Interpolation helper ───────────────────────────────────────
+all_years <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
+
+interp_band <- function(df, group_vars) {
+  if (nrow(df) == 0) return(df)
   df %>%
-    group_by(model, scenario) %>%
-    complete(year = gdp_years_std) %>%
+    mutate(.rep = !is.na(value)) %>%
+    group_by(across(all_of(group_vars))) %>%
+    complete(year = all_years) %>%
     arrange(year) %>%
-    mutate(value = {
-      ok <- !is.na(value)
-      if (sum(ok) >= 2) approx(year[ok], value[ok], xout = year, rule = 2)$y
-      else value
-    }) %>%
+    mutate(
+      .rep  = replace_na(.rep, FALSE),
+      value = { ok <- !is.na(value)
+                if (sum(ok) >= 2) approx(year[ok], value[ok], xout = year, rule = 1)$y
+                else value }
+    ) %>%
     filter(!is.na(value)) %>%
     ungroup()
 }
 
 # ══════════════════════════════════════════════════════════════
-# 1. LOAD DATA  (same parquets as fig2.R)
+# 1. LOAD DATA
 # ══════════════════════════════════════════════════════════════
-run_python_download("GDP|MER", "gdp_mer")
-run_python_download("GDP|PPP", "gdp_ppp")
 
-load_gdp_var <- function(prefix, varname, regions = "World") {
-  tryCatch(
-    load_pq(prefix) %>%
-      filter(variable == varname, region %in% regions, scenario %in% scenarios),
-    error = function(e) NULL
-  )
-}
-gdp_mer_raw <- load_gdp_var("gdp_mer", "GDP|MER")
-gdp_ppp_raw <- load_gdp_var("gdp_ppp", "GDP|PPP")
-models_mer  <- if (!is.null(gdp_mer_raw)) unique(as.character(gdp_mer_raw$model)) else character(0)
+# ── CO2 (shared parquet) ───────────────────────────────────────
+run_python_download("Emissions|CO2", "post_co2_total", all_regions)
 
-gdp_all <- bind_rows(
-  gdp_mer_raw,
-  if (!is.null(gdp_ppp_raw)) filter(gdp_ppp_raw, !model %in% models_mer) else NULL
-) %>% filter(!is.na(value))
-gdp_all <- fix_gem_e3_years(gdp_all)
+co2_raw <- load_pq("post_co2_total") %>%
+  filter(variable == "Emissions|CO2",
+         scenario %in% scenarios,
+         year     %in% all_years)
+co2_raw <- fix_gem_e3_years(co2_raw)
 
-# Fallback: if world-level GDP is missing, aggregate from R10 regions
-if (nrow(gdp_all) == 0) {
-  r10_regions_sm3 <- c(
-    "Africa (R10)", "China+ (R10)", "Europe (R10)", "India+ (R10)",
-    "Latin America (R10)", "Middle East (R10)", "North America (R10)",
-    "Other (R10)", "Pacific OECD (R10)", "Reforming Economies (R10)",
-    "Rest of Asia (R10)"
-  )
-  load_gdp_r10 <- function(prefix, varname) {
-    tryCatch(
-      load_pq(prefix) %>%
-        filter(variable == varname, region %in% r10_regions_sm3, scenario %in% scenarios),
-      error = function(e) NULL
-    )
-  }
-  gdp_mer_r10_raw <- load_gdp_r10("gdp_mer_r10", "GDP|MER")
-  gdp_ppp_r10_raw <- load_gdp_r10("gdp_ppp_r10", "GDP|PPP")
-  models_mer_r10  <- if (!is.null(gdp_mer_r10_raw)) unique(as.character(gdp_mer_r10_raw$model)) else character(0)
-  gdp_r10_raw <- bind_rows(
-    gdp_mer_r10_raw,
-    if (!is.null(gdp_ppp_r10_raw)) filter(gdp_ppp_r10_raw, !model %in% models_mer_r10) else NULL
-  ) %>% filter(!is.na(value))
-  gdp_r10_raw <- fix_gem_e3_years(gdp_r10_raw)
-  if (nrow(gdp_r10_raw) > 0) {
-    message("World GDP parquet empty \u2014 aggregating world total from R10 regions.")
-    gdp_all <- gdp_r10_raw %>%
-      group_by(model, scenario, variable, year) %>%
-      summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
-      mutate(region = "World")
-  }
-}
+m_all <- sort(unique(as.character(co2_raw$model)))
+m_all <- m_all[m_all != "WITCH 6.0-EU28"]
+m_all <- filter_latest_remind(m_all)
+
+m_ok <- co2_raw %>%
+  filter(model %in% m_all, region == "World", !is.na(value)) %>%
+  distinct(model, scenario) %>%
+  group_by(model) %>%
+  summarise(has_meet = any(scenario == ma_scen),
+            n_scen   = n_distinct(scenario), .groups = "drop") %>%
+  filter(has_meet, n_scen >= min(3L, length(scenarios))) %>%
+  pull(model)
+message("CO2 models: ", paste(m_ok, collapse = ", "))
+
+# ── GSAT ───────────────────────────────────────────────────────
+run_python_download(ca_vars, "climate_assess_full")
 
 ca_backup_dir <- file.path(project_dir, "data", "climate_assessment")
+dir.create(ca_backup_dir, recursive = TRUE, showWarnings = FALSE)
+for (f in list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)) {
+  dst <- file.path(ca_backup_dir, basename(f))
+  if (!file.exists(dst)) { file.copy(f, dst); message("Backed up: ", dst) }
+}
+
 ca_files <- list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
 ca_files <- ca_files[!grepl("_meta\\.parquet$", ca_files)]
 if (length(ca_files) == 0)
   ca_files <- list.files(ca_backup_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
 if (length(ca_files) == 0)
-  stop("climate_assess_full parquet not found. Run fig2.R first.")
-web_raw <- read_parquet(ca_files[which.max(file.info(ca_files)$mtime)])
+  stop("climate_assess_full parquet not found. Run fig2_gsat.R first.")
+raw_gsat <- read_parquet(ca_files[which.max(file.info(ca_files)$mtime)])
 
-# ══════════════════════════════════════════════════════════════
-# 2. MODEL SELECTION  (T50 / p50 only)
-# ══════════════════════════════════════════════════════════════
-models_gsat <- web_raw %>%
+gsat <- raw_gsat %>%
   filter(grepl("Surface Temperature.*GSAT", variable, ignore.case = TRUE),
-         region == "World", scenario %in% scenarios) %>%
+         region == "World", scenario %in% scenarios,
+         year >= 2020, year <= 2100) %>%
   mutate(pct_col = case_when(
+    grepl("33rd",        variable, ignore.case = TRUE) ~ "p33",
     grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
+    grepl("67th",        variable, ignore.case = TRUE) ~ "p67",
     TRUE ~ NA_character_
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
   pivot_wider(names_from = pct_col, values_from = value) %>%
-  filter(!is.na(p50)) %>%
-  pull(model) %>% as.character() %>% unique()
+  filter(!is.na(p50), !is.na(p67))
 
-cands_w <- filter_latest_remind(
-  sort(intersect(unique(as.character(gdp_all$model)), models_gsat)))
-cands_w <- cands_w[cands_w != "WITCH 6.0-EU28"]
+mods_gsat <- filter_latest_remind(sort(unique(as.character(gsat$model))))
+mods_gsat <- mods_gsat[mods_gsat != "WITCH 6.0-EU28"]
 
-meet_w <- gdp_all %>% filter(model %in% cands_w, scenario == ma_scen, !is.na(value)) %>%
-  select(model, year, meet_val = value)
-endo_w <- gdp_all %>% filter(model %in% cands_w, scenario != ma_scen, !is.na(value)) %>%
-  inner_join(meet_w, by = c("model", "year")) %>%
-  mutate(pct_diff = abs(value - meet_val) / meet_val) %>%
-  filter(is.finite(pct_diff), pct_diff > ENDOGENOUS_THRESHOLD) %>%
-  pull(model) %>% as.character() %>% unique()
-use_models <- filter_latest_remind(sort(intersect(cands_w, endo_w)))
-message("Models: ", paste(use_models, collapse = ", "))
+gsat <- gsat %>%
+  filter(model %in% mods_gsat) %>%
+  mutate(scenario = factor(scenario, levels = scen_plot_order))
 
-gdp_all <- gdp_all %>% filter(model %in% use_models)
+message("GSAT models (", length(mods_gsat), "): ", paste(mods_gsat, collapse = ", "))
 
-web_gsat_all <- web_raw %>%
-  filter(grepl("Surface Temperature.*GSAT", variable, ignore.case = TRUE),
-         model %in% use_models, region == "World",
-         scenario %in% scenarios, year >= 2020, year <= 2100) %>%
-  mutate(pct_col = case_when(
-    grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
-    TRUE ~ NA_character_
-  )) %>%
-  filter(!is.na(pct_col)) %>%
-  select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value)
+model_short_names <- c(
+  "GEM-E3 V2026"                      = "GEM-E3",
+  "IMAGE 3.4"                          = "IMAGE",
+  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGEix",
+  "OPEN-PROM 2.2"                      = "OPEN-PROM",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND",
+  "WITCH 6.0"                          = "WITCH",
+  "IMACLIM 2.0"                        = "IMACLIM"
+)
+gsat <- gsat %>%
+  mutate(model = ifelse(model %in% names(model_short_names),
+                        model_short_names[model], model))
+mods_gsat <- sort(unique(as.character(gsat$model)))
 
 # ══════════════════════════════════════════════════════════════
-# 3. COMPUTE NPV FOR EACH DISCOUNT RATE (T50 only)
-#    Same MC draws for all rates — only discounting changes.
+# 2. GSAT TIMESERIES DATA  (panels a and b)
 # ══════════════════════════════════════════════════════════════
-set.seed(42)
-mc_alpha_draws <- rnorm(N_MC, ALPHA_C, SE_ALPHA_C)
-mc_beta_draws  <- rnorm(N_MC, BETA_C,  SE_BETA_C)
 
-ann_y_full <- seq(BASE_YEAR, 2100L)
+web_ts_p50 <- gsat %>%
+  group_by(scenario, year) %>%
+  summarise(ts_min = min(p50, na.rm = TRUE), ts_med = median(p50, na.rm = TRUE),
+            ts_max = max(p50, na.rm = TRUE), .groups = "drop")
 
-results_dr <- bind_rows(lapply(seq_along(DISC_RATES), function(di) {
-  dr   <- DISC_RATES[di]
-  dlbl <- DISC_LABELS[di]
-  message("\nDiscount rate: ", dlbl)
-  disc_v <- 1 / (1 + dr)^(ann_y_full - BASE_YEAR)
+central_p50 <- gsat %>%
+  inner_join(web_ts_p50 %>% select(scenario, year, ts_med), by = c("scenario", "year")) %>%
+  group_by(scenario, model) %>%
+  summarise(rmse = sqrt(mean((p50 - ts_med)^2, na.rm = TRUE)), .groups = "drop") %>%
+  group_by(scenario) %>% slice_min(rmse, n = 1, with_ties = FALSE) %>%
+  ungroup() %>% select(scenario, model)
 
-  bind_rows(lapply(use_models, function(mod) {
-    gdp_raw  <- gdp_all      %>% filter(model == mod)
-    web_gsat <- web_gsat_all %>% filter(model == mod)
-    if (nrow(gdp_raw) == 0 || nrow(web_gsat) == 0) return(NULL)
-    gdp_filled <- gdp_raw %>% fill_sparse_w()
+peak_p50 <- gsat %>%
+  semi_join(central_p50, by = c("scenario", "model")) %>%
+  group_by(scenario) %>% slice_max(p50, n = 1, with_ties = FALSE) %>% ungroup() %>%
+  mutate(label = paste0(sprintf("%.1f", p50), "\u00b0C (", year, ")"))
 
-    joined <- gdp_filled %>%
-      filter(year %in% gdp_years_std) %>%
-      mutate(scenario = as.character(scenario)) %>%
-      inner_join(
-        web_gsat %>% filter(year %in% gdp_years_std) %>%
-          mutate(scenario = as.character(scenario)),
-        by = c("model", "scenario", "year")
-      )
-    meet_ref <- joined %>% filter(scenario == ma_scen) %>%
-      select(year, meet_raw = value, meet_p50 = p50)
-    if (nrow(meet_ref) < 2) return(NULL)
+web_ts_p67 <- gsat %>%
+  group_by(scenario, year) %>%
+  summarise(ts_min = min(p67, na.rm = TRUE), ts_med = median(p67, na.rm = TRUE),
+            ts_max = max(p67, na.rm = TRUE), .groups = "drop")
 
-    nonmeet_jn <- joined %>% filter(scenario %in% scens_nonmeet) %>%
-      left_join(meet_ref, by = "year")
+central_p67 <- gsat %>%
+  inner_join(web_ts_p67 %>% select(scenario, year, ts_med), by = c("scenario", "year")) %>%
+  group_by(scenario, model) %>%
+  summarise(rmse = sqrt(mean((p67 - ts_med)^2, na.rm = TRUE)), .groups = "drop") %>%
+  group_by(scenario) %>% slice_min(rmse, n = 1, with_ties = FALSE) %>%
+  ungroup() %>% select(scenario, model)
 
-    bind_rows(lapply(scens_nonmeet, function(scen) {
-      d <- nonmeet_jn %>%
-        filter(as.character(scenario) == scen,
-               !is.na(p50), !is.na(meet_p50)) %>%
-        arrange(year)
-      if (nrow(d) == 0) return(NULL)
+peak_p67 <- gsat %>%
+  semi_join(central_p67, by = c("scenario", "model")) %>%
+  group_by(scenario) %>% slice_max(p67, n = 1, with_ties = FALSE) %>% ungroup() %>%
+  mutate(label = paste0(sprintf("%.1f", p67), "\u00b0C (", year, ")"))
 
-      gdp_s <- approx(d$year, d$value,    xout = ann_y_full, rule = 2)$y
-      gdp_m <- approx(d$year, d$meet_raw, xout = ann_y_full, rule = 2)$y
-      Ts50  <- pmax(approx(d$year, d$p50,      xout = ann_y_full, rule = 2)$y, 0)
-      Tm50  <- pmax(approx(d$year, d$meet_p50, xout = ann_y_full, rule = 2)$y, 0)
+message("Most-central models (p50): ", paste(central_p50$model, collapse = ", "))
+message("Most-central models (p67): ", paste(central_p67$model, collapse = ", "))
 
-      mc_npv50 <- function(T_s, T_m) {
-        dam_s <- outer(T_s^1.5, mc_alpha_draws) + outer(T_s, mc_beta_draws)
-        dam_m <- outer(T_m^1.5, mc_alpha_draws) + outer(T_m, mc_beta_draws)
-        gmc_s <- sweep(1 - dam_s / 100, 1, gdp_s, `*`)
-        gmc_m <- sweep(1 - dam_m / 100, 1, gdp_m, `*`)
-        meet_npv_dam <- colSums(sweep(gmc_m, 1, disc_v, `*`))
-        colSums(sweep(gmc_s - gmc_m, 1, disc_v, `*`)) / meet_npv_dam * 100
-      }
-      mc_v1 <- mc_npv50(Ts50, Tm50)
+ts_y_lo <- floor(min(web_ts_p50$ts_min, web_ts_p67$ts_min, na.rm = TRUE) * 10) / 10
+ts_y_hi <- ceiling(max(max(peak_p50$p50, na.rm = TRUE), max(peak_p67$p67, na.rm = TRUE),
+                        web_ts_p50$ts_max, web_ts_p67$ts_max, na.rm = TRUE) * 10) / 10 + 0.3
 
-      tibble(
-        model       = mod,
-        model_short = short_name(mod),
-        scenario    = scen,
-        disc_rate   = dr,
-        disc_label  = dlbl,
-        q10_v1_pct  = quantile(mc_v1, 0.10),
-        q50_v1_pct  = quantile(mc_v1, 0.50),
-        q90_v1_pct  = quantile(mc_v1, 0.90)
-      )
-    }))
-  }))
-}))
+# ══════════════════════════════════════════════════════════════
+# 3. CUMULATIVE CO₂ AND ERF DATA  (panels c and d)
+# ══════════════════════════════════════════════════════════════
 
-# ── Factors ────────────────────────────────────────────────────
-results_dr <- results_dr %>%
-  mutate(
-    disc_label     = factor(disc_label, levels = DISC_LABELS),
-    scenario_label = factor(scen_labels[scenario], levels = unname(scen_labels)),
-    model_short    = factor(model_short, levels = sapply(use_models, short_name))
+trap_cumul <- function(yr, val) {
+  n <- length(yr); out <- numeric(n)
+  for (i in seq(2, n))
+    out[i] <- out[i - 1] + (val[i - 1] + val[i]) / 2 * (yr[i] - yr[i - 1])
+  out
+}
+
+co2_world <- co2_raw %>%
+  filter(model %in% m_ok, region == "World") %>%
+  mutate(value = value / 1000,
+         scenario = unname(scenario_labels[as.character(scenario)])) %>%
+  select(model, scenario, year, value)
+
+co2_cumul_band <- co2_world %>%
+  group_by(model, scenario) %>%
+  complete(year = all_years) %>% arrange(year) %>%
+  mutate(value = { ok <- !is.na(value)
+                   if (sum(ok) >= 2) approx(year[ok], value[ok], xout = year, rule = 2)$y
+                   else value }) %>%
+  filter(!is.na(value)) %>%
+  mutate(cumulative = trap_cumul(year, value)) %>%
+  ungroup() %>%
+  group_by(scenario, year) %>%
+  summarise(med = median(cumulative, na.rm = TRUE),
+            lo  = min(cumulative,    na.rm = TRUE),
+            hi  = max(cumulative,    na.rm = TRUE), .groups = "drop") %>%
+  mutate(scenario = factor(scenario, levels = scen_lbl_levels))
+
+budget_df <- tibble(
+  y   = c(400L, 500L, 1150L, 1350L),
+  lbl = c("1.5\u00b0C (67%)", "1.5\u00b0C (50%)", "2.0\u00b0C (67%)", "2.0\u00b0C (50%)")
+)
+
+extract_erf <- function(raw_df) {
+  df <- raw_df %>%
+    filter(grepl("Effective Radiative Forcing", variable),
+           scenario %in% scenarios, region == "World",
+           year >= 2020, year <= 2100, !is.na(value)) %>%
+    group_by(model, scenario, year) %>%
+    arrange(desc(grepl("Median", variable, ignore.case = TRUE))) %>%
+    slice(1) %>% ungroup() %>% select(model, scenario, year, value)
+  if (nrow(df) == 0) NULL else df
+}
+erf_raw <- tryCatch(extract_erf(load_pq("f15_ca_all")), error = function(e) NULL)
+if (is.null(erf_raw))
+  erf_raw <- tryCatch(extract_erf(load_pq("f15_erf")), error = function(e) NULL)
+if (is.null(erf_raw)) {
+  run_python_download("Emissions|Kyoto Gases", "f15_kghg")
+  kghg_raw <- tryCatch(
+    load_pq("f15_kghg") %>%
+      filter(region == "World", scenario %in% scenarios,
+             year %in% all_years, !is.na(value)) %>%
+      select(model, scenario, year, value),
+    error = function(e) NULL
   )
+} else {
+  kghg_raw <- NULL
+}
+message("ERF rows: ", if (is.null(erf_raw)) "none" else nrow(erf_raw))
+
+use_erf <- !is.null(erf_raw) && nrow(erf_raw) > 0
+if (use_erf) {
+  d_raw    <- erf_raw %>% filter(model %in% m_ok) %>%
+    mutate(scenario = unname(scenario_labels[as.character(scenario)]))
+  d_ylabel <- "W/m\u00b2"
+  d_title  <- "(d) Effective radiative forcing"
+} else if (!is.null(kghg_raw) && nrow(kghg_raw) > 0) {
+  co2_for_d <- co2_raw %>% filter(model %in% m_ok, region == "World") %>%
+    mutate(value = value / 1000, scenario = as.character(scenario)) %>%
+    select(model, scenario, year, co2_val = value)
+  d_raw <- inner_join(
+    kghg_raw %>% filter(model %in% m_ok) %>%
+      mutate(value = value / 1000, scenario = as.character(scenario)) %>%
+      select(model, scenario, year, kghg_val = value),
+    co2_for_d, by = c("model", "scenario", "year")
+  ) %>%
+    mutate(value = kghg_val - co2_val,
+           scenario = unname(scenario_labels[scenario])) %>%
+    select(model, scenario, year, value)
+  d_ylabel <- "Gt CO\u2082-eq/yr"
+  d_title  <- "(d) Non-CO\u2082 GHG emissions"
+} else {
+  d_raw    <- NULL
+  d_ylabel <- ""
+  d_title  <- "(d) Effective radiative forcing"
+}
+
+if (!is.null(d_raw) && nrow(d_raw) > 0) {
+  d_band <- d_raw %>%
+    interp_band(c("model", "scenario")) %>%
+    group_by(scenario, year) %>%
+    summarise(med = median(value, na.rm = TRUE),
+              lo  = min(value,    na.rm = TRUE),
+              hi  = max(value,    na.rm = TRUE), .groups = "drop") %>%
+    mutate(scenario = factor(scenario, levels = scen_lbl_levels))
+} else {
+  d_band <- NULL
+}
 
 # ══════════════════════════════════════════════════════════════
-# 4. PLOT
+# 4. BUILD PANELS
 # ══════════════════════════════════════════════════════════════
-mod_short_levels <- levels(results_dr$model_short)
-n_mods           <- length(mod_short_levels)
-model_colors_sm  <- setNames(scales::hue_pal(l = 55, c = 100)(n_mods), mod_short_levels)
 
-p <- ggplot(results_dr,
-            aes(x = disc_label, y = q50_v1_pct,
-                colour = model_short, group = model_short)) +
-  geom_hline(yintercept = 0, linewidth = 0.4, linetype = "dashed", colour = "grey50") +
-  geom_errorbar(aes(ymin = q10_v1_pct, ymax = q90_v1_pct),
-                width = 0.15, linewidth = 0.65, alpha = 0.75) +
-  geom_line(linewidth = 0.85) +
-  geom_point(size = 2.8) +
-  facet_wrap(~ scenario_label, nrow = 1) +
-  scale_colour_manual(values = model_colors_sm, name = NULL) +
-  labs(
-    title = "GDP NPV: discount rate sensitivity (T\u2085\u2080 median GSAT)",
-    x     = NULL,
-    y     = "NPV vs Meet Aspirations (% of damage-adjusted Meet NPV)"
-  ) +
-  guides(colour = guide_legend(ncol = 1, override.aes = list(linewidth = 1.5))) +
-  theme(legend.position = "right",
-        axis.text.x     = element_text(size = 13.0, face = "bold"),
-        axis.title.y    = element_text(size = 11.0))
+x_breaks_ts  <- seq(2020, 2100, 20)
+x_breaks_co2 <- c(2020, seq(2040, 2100, by = 20))
 
-n_scens  <- length(scens_nonmeet)
+# ── Panel (a): T_median (p50) ─────────────────────────────────
+p_a <- ggplot(web_ts_p50, aes(x = year, colour = scenario, fill = scenario)) +
+  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, colour = NA) +
+  geom_line(aes(y = ts_min), linewidth = 0.45, alpha = 0.6) +
+  geom_line(aes(y = ts_max), linewidth = 0.45, alpha = 0.6) +
+  geom_line(data = semi_join(gsat, central_p50, by = c("scenario", "model")),
+            aes(x = year, y = p50, group = interaction(model, scenario)), linewidth = 1.1) +
+  geom_point(data = peak_p50, aes(x = year, y = p50),
+             size = 3.1, shape = 21, fill = "white", stroke = 1.2,
+             inherit.aes = FALSE, show.legend = FALSE) +
+  geom_text(data = peak_p50, aes(x = year, y = p50, label = label, colour = scenario),
+            vjust = -0.85, hjust = 0.5, size = 5.4, fontface = "bold",
+            inherit.aes = FALSE, show.legend = FALSE) +
+  scale_colour_manual(values = scen_col_ssp2, guide = "none") +
+  scale_fill_manual(  values = scen_col_ssp2, guide = "none") +
+  scale_x_continuous(breaks = x_breaks_ts, expand = expansion(mult = c(0.02, 0.06))) +
+  coord_cartesian(ylim = c(ts_y_lo, ts_y_hi)) +
+  labs(title = "(a) T\u2085\u2080 (median) timeseries", x = NULL, y = "\u00b0C above 1850\u20131900") +
+  theme(legend.position = "none", aspect.ratio = 1)
+
+# ── Panel (b): T_67th (p67) ───────────────────────────────────
+p_b <- ggplot(web_ts_p67, aes(x = year, colour = scenario, fill = scenario)) +
+  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, colour = NA) +
+  geom_line(aes(y = ts_min), linewidth = 0.45, alpha = 0.6) +
+  geom_line(aes(y = ts_max), linewidth = 0.45, alpha = 0.6) +
+  geom_line(data = semi_join(gsat, central_p67, by = c("scenario", "model")),
+            aes(x = year, y = p67, group = interaction(model, scenario)), linewidth = 1.1) +
+  geom_point(data = peak_p67, aes(x = year, y = p67),
+             size = 3.1, shape = 21, fill = "white", stroke = 1.2,
+             inherit.aes = FALSE, show.legend = FALSE) +
+  geom_text(data = peak_p67, aes(x = year, y = p67, label = label, colour = scenario),
+            vjust = -0.85, hjust = 0.5, size = 5.4, fontface = "bold",
+            inherit.aes = FALSE, show.legend = FALSE) +
+  scale_colour_manual(values = scen_col_ssp2, guide = "none") +
+  scale_fill_manual(  values = scen_col_ssp2, guide = "none") +
+  scale_x_continuous(breaks = x_breaks_ts, expand = expansion(mult = c(0.02, 0.06))) +
+  coord_cartesian(ylim = c(ts_y_lo, ts_y_hi)) +
+  labs(title = "(b) T\u2086\u2087 (67th pct) timeseries", x = NULL, y = "\u00b0C above 1850\u20131900") +
+  theme(legend.position = "none", aspect.ratio = 1)
+
+# ── Panel (c): Cumulative CO₂ from 2020 ───────────────────────
+p_c <- ggplot(co2_cumul_band,
+              aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
+  geom_line(aes(y = med), linewidth = 0.9) +
+  geom_hline(data = budget_df, aes(yintercept = y),
+             linewidth = 0.45, linetype = "dashed", colour = "grey40", inherit.aes = FALSE) +
+  geom_text(data = budget_df, aes(x = 2020, y = y, label = lbl),
+            hjust = 0, vjust = -0.45, size = 4.7, colour = "grey35", inherit.aes = FALSE) +
+  scale_colour_manual(values = scen_col_lbl, name = NULL) +
+  scale_fill_manual(  values = scen_col_lbl, name = NULL) +
+  scale_x_continuous(breaks = x_breaks_co2) +
+  labs(title = "(c) Cumulative CO\u2082 from 2020", x = NULL, y = "Gt CO\u2082") +
+  guides(colour = guide_legend(ncol = 2, override.aes = list(fill = NA)), fill = "none") +
+  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
+        aspect.ratio = 1)
+
+# ── Panel (d): ERF or non-CO₂ GHG ────────────────────────────
+if (!is.null(d_band)) {
+  p_d <- ggplot(d_band,
+                aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
+    geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
+    geom_line(aes(y = med), linewidth = 0.9) +
+    scale_colour_manual(values = scen_col_lbl, name = NULL) +
+    scale_fill_manual(  values = scen_col_lbl, name = NULL) +
+    scale_x_continuous(breaks = x_breaks_co2) +
+    labs(title = d_title, x = NULL, y = d_ylabel) +
+    guides(colour = guide_legend(ncol = 2, override.aes = list(fill = NA)), fill = "none") +
+    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
+          aspect.ratio = 1)
+} else {
+  p_d <- ggplot() +
+    annotate("text", x = 0.5, y = 0.5,
+             label = "No data available for panel (d)\n(Effective Radiative Forcing)",
+             size = 6.0, colour = "grey55", hjust = 0.5, vjust = 0.5) +
+    scale_x_continuous(limits = c(0, 1)) + scale_y_continuous(limits = c(0, 1)) +
+    labs(title = d_title, x = NULL, y = NULL) +
+    theme(axis.text = element_blank(), axis.ticks = element_blank(),
+          panel.grid = element_blank(), aspect.ratio = 1)
+}
+
+# ══════════════════════════════════════════════════════════════
+# 5. COMBINE AND SAVE
+# ══════════════════════════════════════════════════════════════
+fig <- (p_a | p_b) / (p_c | p_d)
+
 out_file <- file.path(graphs_dir, "fig_sm3.png")
-ggsave(out_file, p,
-       width  = 4.2 * n_scens + 2.5,
-       height = 5.5,
-       dpi    = 300,
-       limitsize = FALSE)
+ggsave(out_file, fig, width = 16, height = 14, dpi = 300)
 message("Saved: ", out_file)
 
 # ── Update figure captions Word document ──────────────────────
