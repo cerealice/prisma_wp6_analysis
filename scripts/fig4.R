@@ -38,12 +38,78 @@ scenarios     <- c(
 )
 BASELINE_SCEN <- "SSP2 - Meet Aspirations"
 TARGET_SCEN   <- "SSP2 - Late Reawakening"
-CP_DISCOUNT   <- 0.05
+CP_DISCOUNT   <- 0.02   # matches the 2% used for the GDP NPV elsewhere
+                        # (Brutschin SM 3.2 specify 5%; deviation to keep one
+                        # discount rate across the paper)
 
-SELECTED_INDICATORS <- c("2.1", "3.1", "3.2", "4.1", "5.1", "P1")
+# TEMPORARY COMPARISON BUILD.
+#   2.1  carbon price growth, undiscounted level condition
+#   2.1b carbon price growth, level condition on NPV at 5% to 2020
+#   5.1  per-capita CO2 decline, fixed screen (EU / Pac OECD / N. America out)
+#   5.1b per-capita CO2 decline, time-varying governance screen (Andrijevic)
+# Drop 2.1b and 5.1b once the comparison is settled.
+SELECTED_INDICATORS <- c("2.1", "3.1", "3.2", "4.1", "5.1b", "P1")
 
 # Largest single-year fall in global CO2 on record: 2020 pandemic shutdown.
 COVID_DECLINE <- 2.23
+
+# Brutschin et al. Table 1, indicator 2.1: a fivefold rise per decade.
+# Check SM section 3 for the currency year and whether the level is discounted.
+CP_RATIO     <- 5
+# Denominator floor: growth is measured against at least this price, so that a
+# near-zero starting price does not produce an arbitrarily large ratio.
+CP_FLOOR     <- 10
+# The 120$ level is applied to the price in NPV discounted to 2020 at
+# CP_DISCOUNT. The ratio uses undiscounted prices.
+
+# Brutschin indicator 5.1. High concern requires a fast per-capita CO2
+# reduction AND a projected governance level below 0.6. Governance is applied
+# here as a regional screen: the three R10 regions that clear 0.6 under SSP2
+# (Europe, Pacific OECD, North America) are excluded, and the indicator reports
+# the worst decline among the remaining regions. The 20% rate threshold is the
+# reduction the EU-28 achieved over 2010-2019.
+PC_RATE    <- 20
+PC_EXCLUDE <- c("Europe (R10)", "Pacific OECD (R10)", "North America (R10)")
+PC_GOV_THR <- 0.6
+# Indicator 5.1 is evaluated on the PRISMA clusters rather than on R10 regions.
+# Population-weighted SSP2 governance (Andrijevic et al.) puts Transition
+# Leaders above the 0.6 threshold for the whole century (0.78 in 2020 rising to
+# 0.89 in 2100) and the other two clusters below it in 2020 (0.51 and 0.41), so
+# only those two are eligible, and only in the decades in which they are
+# still projected below it. See data/governance_cluster_ssp2.csv.
+PC_CLUSTER_MAP <- c(
+  "Africa (R10)"              = "Diversifying Economies",
+  "China+ (R10)"              = "Diversifying Economies",
+  "Europe (R10)"              = "Transition Leaders",
+  "India+ (R10)"              = "Diversifying Economies",
+  "Latin America (R10)"       = "Diversifying Economies",
+  "Middle East (R10)"         = "Fossil-Dependent",
+  "North America (R10)"       = "Diversifying Economies",
+  "Other (R10)"               = "Diversifying Economies",
+  "Pacific OECD (R10)"        = "Transition Leaders",
+  "Reforming Economies (R10)" = "Fossil-Dependent",
+  "Rest of Asia (R10)"        = "Diversifying Economies"
+)
+PC_CLUSTERS <- c("Diversifying Economies", "Fossil-Dependent")
+   # Brutschin SM 6.4 governance threshold
+
+# Population-weighted SSP2 governance by R10 region and decade, aggregated from
+# Andrijevic et al. (2019) country projections using the IAMC common-definitions
+# R10 membership. Built by scripts/build_governance_r10.py; the country mapping
+# is in data/country_to_r10.csv.
+gov_cl <- local({
+  f <- file.path(project_dir, "data", "governance_cluster_ssp2.csv")
+  if (!file.exists(f)) { message("governance_cluster_ssp2.csv not found"); return(NULL) }
+  readr::read_csv(f, show_col_types = FALSE)
+})
+
+# projected governance of cluster cl in the decade ending at year y
+gov_at <- function(cl, y) {
+  if (is.null(gov_cl)) return(NA_real_)
+  v <- gov_cl$governance[gov_cl$cluster == cl &
+                         gov_cl$year == min(max(y, 2020), 2100)]
+  if (length(v) == 0) NA_real_ else v[1]
+}
 
 dec_end <- seq(2030, 2100, by = 10)
 need    <- function(ids) is.null(SELECTED_INDICATORS) || any(SELECTED_INDICATORS %in% ids)
@@ -54,6 +120,12 @@ r10_regions <- c(
   "Other (R10)", "Pacific OECD (R10)", "Reforming Economies (R10)",
   "Rest of Asia (R10)"
 )
+
+# Regions over which indicator 5.1 is evaluated (see PC_EXCLUDE above).
+PC_REGIONS <- setdiff(r10_regions, PC_EXCLUDE)
+
+# Short label for a region, used to tag "worst region" values in the plot.
+short_region <- function(r) sub(" \\(R10\\)$", "", r)
 
 model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
@@ -215,8 +287,11 @@ simple_ind <- function(id, dim, name, unit, med, high, fn)
 # ══════════════════════════════════════════════════════════════
 indicators <- list(
 
+  # Brutschin et al. Table 1, indicator 2.1. The plotted value is the decadal
+  # growth ratio; high concern additionally requires the price level to reach
+  # CP_MIN_LEVEL, which is what screens out large ratios from a near-zero base.
   list(id = "2.1", dim = "Economic", name = "Carbon price growth",
-       unit = "\u00d7 per decade", med = 5, high = 5,
+       unit = "\u00d7 per decade", med = CP_RATIO, high = CP_RATIO,
        fn = function(m, s) {
          if (is.null(cp_raw)) return(na_res())
          p <- get_series(cp_raw, m, s, "Price|Carbon", region = "World")
@@ -225,10 +300,15 @@ indicators <- list(
            if (all(sapply(ps, function(x) all(is.na(x))))) return(na_res())
            p <- do.call(pmax, c(ps, na.rm = TRUE)); names(p) <- YEARS
          }
+         # Growth only. Brutschin pair the 5x decadal rise with a price level
+         # of 120$ in NPV; that level condition is not applied here, so the
+         # panel reports the rate of increase and nothing about the level.
          pd    <- at(p, dec_end)
          pprev <- at(p, dec_end - 10)
-         ratio <- pd / (pprev + 1)
-         level <- ifelse(is.na(ratio), NA_integer_, ifelse(ratio >= 5, 2L, 0L))
+         ratio <- ifelse(is.na(pprev) | is.na(pd), NA_real_,
+                         pd / pmax(pprev, CP_FLOOR))
+         level <- ifelse(is.na(ratio), NA_integer_,
+                         ifelse(ratio >= CP_RATIO, 2L, 0L))
          list(value = ratio, level = level)
        }),
 
@@ -243,18 +323,43 @@ indicators <- list(
   simple_ind("4.1", "Socio-cultural", "Energy demand decline", "%/decade", 10, 20,
     function(m, s) -dec_pct_chg(get_series(fe_raw, m, s, "Final Energy"))),
 
-  list(id = "5.1", dim = "Institutional", name = "Per-capita CO\u2082 decline",
-       unit = "%/decade", med = 10, high = 20,
+  # TEMPORARY: 5.1 with the governance condition applied as published, per
+  # region and per decade, from the Andrijevic SSP2 projections. In each decade
+  # only regions with governance < PC_GOV_THR are eligible, and the value is the
+  # worst decline among them.
+  list(id = "5.1b", dim = "Institutional",
+       name = "Per-cap reg. CO₂ decl.",
+       unit = "%/decade", med = PC_RATE, high = PC_RATE,
        fn = function(m, s) {
          if (is.null(reg_raw)) return(na_res())
-         co_mat <- sapply(r10_regions, function(r) get_series(reg_raw, m, s, "Emissions|CO2",  region = r))
-         po_mat <- sapply(r10_regions, function(r) get_series(reg_raw, m, s, "Population",      region = r))
-         co_w <- rowSums(co_mat, na.rm = TRUE)
-         po_w <- rowSums(po_mat, na.rm = TRUE)
-         po_w[po_w == 0] <- NA_real_
-         pc  <- setNames(co_w / po_w, YEARS)
-         v   <- 100 * (at(pc, dec_end - 10) - at(pc, dec_end)) / at(pc, dec_end - 10)
-         list(value = v, level = lvl(v, 10, 20))
+         nd <- length(dec_end)
+         vs <- sapply(PC_CLUSTERS, function(cl) {
+           regs <- names(PC_CLUSTER_MAP)[PC_CLUSTER_MAP == cl]
+           co <- rowSums(sapply(regs, function(r)
+                   get_series(reg_raw, m, s, "Emissions|CO2", region = r)), na.rm = TRUE)
+           po <- rowSums(sapply(regs, function(r)
+                   get_series(reg_raw, m, s, "Population", region = r)), na.rm = TRUE)
+           co[co == 0] <- NA_real_; po[po == 0] <- NA_real_
+           pc     <- setNames(co / po, YEARS)
+           pc_srt <- at(pc, dec_end - 10)
+           x      <- 100 * (pc_srt - at(pc, dec_end)) / pc_srt
+           x[is.na(pc_srt) | pc_srt < 0.3] <- NA_real_
+           # eligible only in the decades where this cluster is still projected
+           # below the governance threshold
+           elig <- sapply(dec_end, function(y) {
+             g <- gov_at(cl, y); !is.na(g) && g < PC_GOV_THR
+           })
+           x[!elig] <- NA_real_
+           x
+         })
+         vs <- matrix(vs, nrow = nd)
+         v  <- rep(NA_real_, nd)
+         for (i in seq_len(nd)) {
+           ok <- which(!is.na(vs[i, ]))
+           if (length(ok) == 0) next
+           v[i] <- max(vs[i, ok])
+         }
+         list(value = v, level = lvl(v, PC_RATE, PC_RATE))
        }),
 
   # ── Not a Brutschin et al. indicator ────────────────────────
@@ -291,8 +396,9 @@ run_one <- function(spec, m, s) {
   r <- tryCatch(spec$fn(m, s), error = function(e) {
     warning(spec$id, " / ", m, ": ", conditionMessage(e)); na_res()
   })
+  tg <- if (is.null(r$tag)) rep(NA_character_, length(dec_end)) else as.character(r$tag)
   tibble(model = m, id = spec$id, decade = dec_end,
-         value = as.numeric(r$value), level = as.integer(r$level))
+         value = as.numeric(r$value), level = as.integer(r$level), tag = tg)
 }
 
 mods <- Reduce(union, lapply(list(elec_raw, fe_raw, reg_raw, cp_raw),
@@ -317,11 +423,13 @@ cell_lr <- long_lr %>%
   group_by(model, id) %>%
   group_modify(function(d, key) {
     if (all(is.na(d$value)))
-      return(tibble(value = NA_real_, level = NA_integer_, peak_decade = NA_integer_))
+      return(tibble(value = NA_real_, level = NA_integer_, peak_decade = NA_integer_,
+                    tag = NA_character_))
     lmax <- max(d$level, na.rm = TRUE)
     cand <- which(d$level == lmax & !is.na(d$value))
     j    <- cand[which.max(d$value[cand])]
-    tibble(value = d$value[j], level = lmax, peak_decade = d$decade[j])
+    tibble(value = d$value[j], level = lmax, peak_decade = d$decade[j],
+           tag = d$tag[j])
   }) %>%
   ungroup()
 
@@ -341,7 +449,8 @@ ind_meta_dot <- tibble(
   mutate(
     thr_txt     = case_when(
       id == "P1"  ~ "",
-      id == "2.1" ~ "H \u2265 5\u00d7",
+      id == "2.1"  ~ paste0("H \u2265 ", CP_RATIO, "\u00d7"),
+      id == "5.1b" ~ paste0("H \u2265 ", PC_RATE, " \u00b7 gov < ", PC_GOV_THR),
       TRUE        ~ paste0("M \u2265 ", med, " \u00b7 H \u2265 ", high)
     ),
     thr_lab     = if_else(id == "P1",
@@ -364,12 +473,15 @@ dot_df <- cell_lr %>%
       level == 1L  ~ "#F4D03F",
       TRUE         ~ "#5BB85C"
     ),
-    val_label   = case_when(
+    val_num     = case_when(
       is.na(value)      ~ NA_character_,
       abs(value) >= 1e3 ~ paste0(round(value / 1000, 1), "k"),
       abs(value) >= 100 ~ as.character(round(value, 0)),
       TRUE              ~ formatC(value, format = "f", digits = 1)
-    )
+    ),
+    val_label   = if_else(is.na(val_num), NA_character_,
+                          if_else(is.na(tag), val_num,
+                                  paste0(val_num, "\n", tag)))
   )
 
 # Threshold data frames for geom_hline
@@ -377,7 +489,7 @@ thresh_high_df <- ind_meta_dot %>%
   select(strip_label, thr_val = high, thr_lab)
 
 thresh_med_df <- ind_meta_dot %>%
-  filter(id != "2.1", med != high) %>%   # skip 2.1 (single threshold)
+  filter(med != high) %>%                # 2.1 now has two distinct thresholds
   select(strip_label, thr_val = med)
 
 # Model shapes

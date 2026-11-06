@@ -751,7 +751,7 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
     geom_line(linewidth = 0.9) +
     scale_colour_manual(values = model_colors, name = NULL) +
     scale_linetype_manual(
-      values = c("Undamaged GDP" = "solid", "Damage-adjusted GDP" = "dashed"),
+      values = c("Undamaged GDP" = "dashed", "Damage-adjusted GDP" = "solid"),
       labels = c("Undamaged GDP"     = "Undamaged GDP",
                  "Damage-adjusted GDP" = "Damage-adjusted\nGDP for T67"),
       name   = NULL

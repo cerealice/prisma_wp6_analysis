@@ -8,8 +8,8 @@ library(jsonlite)
 #   PRISMA cluster (columns) × non-Meet scenario (rows).
 #
 #   Same format as panel (a) of fig2.R:
-#     Solid lines  = undamaged GDP (% diff from cluster Meet)
-#     Dashed lines = damage-adjusted GDP (global GSAT T67, H&S fn)
+#     Solid lines  = damage-adjusted GDP (global GSAT T67, H&S fn)
+#     Dashed lines = undamaged GDP (% diff from cluster Meet)
 #     Coloured     = per model
 #     Bold black   = cross-model mean
 #
@@ -355,7 +355,9 @@ p <- ggplot(ts_cl,
   facet_grid(scen_label ~ cluster) +
   scale_colour_manual(values = model_colors, name = NULL) +
   scale_linetype_manual(
-    values = c("Undamaged GDP" = "solid", "Damage-adjusted GDP" = "dashed"),
+    values = c("Undamaged GDP" = "dashed", "Damage-adjusted GDP" = "solid"),
+    labels = c("Undamaged GDP"       = "Undamaged GDP",
+               "Damage-adjusted GDP" = "Damage-adjusted\nGDP for T67"),
     name   = NULL
   ) +
   scale_x_continuous(breaks = seq(2020, 2100, 20)) +

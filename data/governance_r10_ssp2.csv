@@ -1,0 +1,91 @@
+region,year,governance,n_countries
+Africa (R10),2020,0.4074,51
+China+ (R10),2020,0.4996,4
+Europe (R10),2020,0.7662,35
+India+ (R10),2020,0.5144,7
+Latin America (R10),2020,0.5263,31
+Middle East (R10),2020,0.3902,11
+North America (R10),2020,0.8406,2
+Pacific OECD (R10),2020,0.8313,3
+Reforming Economies (R10),2020,0.421,12
+Rest of Asia (R10),2020,0.4954,15
+Africa (R10),2030,0.4451,51
+China+ (R10),2030,0.5428,4
+Europe (R10),2030,0.7893,35
+India+ (R10),2030,0.556,7
+Latin America (R10),2030,0.5521,31
+Middle East (R10),2030,0.4381,11
+North America (R10),2030,0.8535,2
+Pacific OECD (R10),2030,0.8524,3
+Reforming Economies (R10),2030,0.4631,12
+Rest of Asia (R10),2030,0.5345,15
+Africa (R10),2040,0.4799,51
+China+ (R10),2040,0.575,4
+Europe (R10),2040,0.8086,35
+India+ (R10),2040,0.5866,7
+Latin America (R10),2040,0.5753,31
+Middle East (R10),2040,0.4779,11
+North America (R10),2040,0.8638,2
+Pacific OECD (R10),2040,0.8728,3
+Reforming Economies (R10),2040,0.4925,12
+Rest of Asia (R10),2040,0.5651,15
+Africa (R10),2050,0.5112,51
+China+ (R10),2050,0.6029,4
+Europe (R10),2050,0.8245,35
+India+ (R10),2050,0.6124,7
+Latin America (R10),2050,0.5974,31
+Middle East (R10),2050,0.5122,11
+North America (R10),2050,0.8707,2
+Pacific OECD (R10),2050,0.8891,3
+Reforming Economies (R10),2050,0.5168,12
+Rest of Asia (R10),2050,0.591,15
+Africa (R10),2060,0.5391,51
+China+ (R10),2060,0.6269,4
+Europe (R10),2060,0.8381,35
+India+ (R10),2060,0.6349,7
+Latin America (R10),2060,0.6174,31
+Middle East (R10),2060,0.5415,11
+North America (R10),2060,0.8768,2
+Pacific OECD (R10),2060,0.9027,3
+Reforming Economies (R10),2060,0.54,12
+Rest of Asia (R10),2060,0.6145,15
+Africa (R10),2070,0.5646,51
+China+ (R10),2070,0.6491,4
+Europe (R10),2070,0.8519,35
+India+ (R10),2070,0.6574,7
+Latin America (R10),2070,0.6362,31
+Middle East (R10),2070,0.5698,11
+North America (R10),2070,0.8833,2
+Pacific OECD (R10),2070,0.9149,3
+Reforming Economies (R10),2070,0.5634,12
+Rest of Asia (R10),2070,0.6368,15
+Africa (R10),2080,0.588,51
+China+ (R10),2080,0.6693,4
+Europe (R10),2080,0.8643,35
+India+ (R10),2080,0.6763,7
+Latin America (R10),2080,0.6537,31
+Middle East (R10),2080,0.5958,11
+North America (R10),2080,0.8892,2
+Pacific OECD (R10),2080,0.9249,3
+Reforming Economies (R10),2080,0.5862,12
+Rest of Asia (R10),2080,0.6565,15
+Africa (R10),2090,0.6092,51
+China+ (R10),2090,0.6873,4
+Europe (R10),2090,0.875,35
+India+ (R10),2090,0.6931,7
+Latin America (R10),2090,0.6707,31
+Middle East (R10),2090,0.6206,11
+North America (R10),2090,0.8957,2
+Pacific OECD (R10),2090,0.9341,3
+Reforming Economies (R10),2090,0.6074,12
+Rest of Asia (R10),2090,0.674,15
+Africa (R10),2100,0.627,51
+China+ (R10),2100,0.7012,4
+Europe (R10),2100,0.8839,35
+India+ (R10),2100,0.7069,7
+Latin America (R10),2100,0.6853,31
+Middle East (R10),2100,0.6408,11
+North America (R10),2100,0.9,2
+Pacific OECD (R10),2100,0.9407,3
+Reforming Economies (R10),2100,0.6259,12
+Rest of Asia (R10),2100,0.689,15

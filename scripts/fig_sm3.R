@@ -145,6 +145,10 @@ load_pq <- function(prefix) {
 # ── Interpolation helper ───────────────────────────────────────
 all_years <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
 
+# First year of the cumulative CO2 integration. The remaining carbon budgets
+# drawn in panel (d) are selected to match it: set 2020 for the AR6 budgets.
+CUM_START <- 2020
+
 interp_band <- function(df, group_vars) {
   if (nrow(df) == 0) return(df)
   df %>%
@@ -307,22 +311,37 @@ co2_world <- co2_raw %>%
          scenario = unname(scenario_labels[as.character(scenario)])) %>%
   select(model, scenario, year, value)
 
-co2_cumul_band <- co2_world %>%
+# Interpolate on the full grid first, including CUM_START, then integrate
+# from CUM_START onwards so the totals match the budget vintage below.
+co2_cumul_mod <- co2_world %>%
   group_by(model, scenario) %>%
-  complete(year = all_years) %>% arrange(year) %>%
+  complete(year = sort(unique(c(all_years, CUM_START)))) %>% arrange(year) %>%
   mutate(value = { ok <- !is.na(value)
                    if (sum(ok) >= 2) approx(year[ok], value[ok], xout = year, rule = 2)$y
                    else value }) %>%
-  filter(!is.na(value)) %>%
+  filter(!is.na(value), year >= CUM_START) %>%
   mutate(cumulative = trap_cumul(year, value)) %>%
-  ungroup() %>%
+  ungroup()
+
+# Cross-model summary. Each model is integrated over its own trajectory first,
+# so the median is the median of model budgets, not the integral of the median
+# trajectory. Panel (d) shows the model budgets behind it.
+co2_cumul_band <- co2_cumul_mod %>%
   group_by(scenario, year) %>%
   summarise(med = median(cumulative, na.rm = TRUE),
             lo  = min(cumulative,    na.rm = TRUE),
             hi  = max(cumulative,    na.rm = TRUE), .groups = "drop") %>%
   mutate(scenario = factor(scenario, levels = scen_lbl_levels))
 
-budget_df <- tibble(
+# Remaining carbon budgets, matched to CUM_START.
+#   2026: Forster et al. (2026), Indicators of Global Climate Change 2025,
+#         ESSD 18, 3889-3933, Table 8, from the beginning of 2026. Cross-check:
+#         GCB 2025 (Friedlingstein et al. 2026) gives 1055 GtCO2 for 2 C at 50%.
+#   2020: IPCC AR6 WG1, from 2020.
+budget_df <- if (CUM_START >= 2026) tibble(
+  y   = c(80L, 130L, 860L, 1050L),
+  lbl = c("1.5\u00b0C (67%)", "1.5\u00b0C (50%)", "2.0\u00b0C (67%)", "2.0\u00b0C (50%)")
+) else tibble(
   y   = c(400L, 500L, 1150L, 1350L),
   lbl = c("1.5\u00b0C (67%)", "1.5\u00b0C (50%)", "2.0\u00b0C (67%)", "2.0\u00b0C (50%)")
 )
@@ -359,7 +378,7 @@ if (use_erf) {
   d_raw    <- erf_raw %>% filter(model %in% m_ok) %>%
     mutate(scenario = unname(scenario_labels[as.character(scenario)]))
   d_ylabel <- "W/m\u00b2"
-  d_title  <- "(d) Effective radiative forcing"
+  d_title  <- "(c) Effective radiative forcing"
 } else if (!is.null(kghg_raw) && nrow(kghg_raw) > 0) {
   co2_for_d <- co2_raw %>% filter(model %in% m_ok, region == "World") %>%
     mutate(value = value / 1000, scenario = as.character(scenario)) %>%
@@ -374,11 +393,11 @@ if (use_erf) {
            scenario = unname(scenario_labels[scenario])) %>%
     select(model, scenario, year, value)
   d_ylabel <- "Gt CO\u2082-eq/yr"
-  d_title  <- "(d) Non-CO\u2082 GHG emissions"
+  d_title  <- "(c) Non-CO\u2082 GHG emissions"
 } else {
   d_raw    <- NULL
   d_ylabel <- ""
-  d_title  <- "(d) Effective radiative forcing"
+  d_title  <- "(c) Effective radiative forcing"
 }
 
 if (!is.null(d_raw) && nrow(d_raw) > 0) {
@@ -440,26 +459,9 @@ p_b <- ggplot(web_ts_p67, aes(x = year, colour = scenario, fill = scenario)) +
   labs(title = "(b) T\u2086\u2087 (67th pct) timeseries", x = NULL, y = "\u00b0C above 1850\u20131900") +
   theme(legend.position = "none", aspect.ratio = 1)
 
-# ── Panel (c): Cumulative CO₂ from 2020 ───────────────────────
-p_c <- ggplot(co2_cumul_band,
-              aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
-  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
-  geom_line(aes(y = med), linewidth = 0.9) +
-  geom_hline(data = budget_df, aes(yintercept = y),
-             linewidth = 0.45, linetype = "dashed", colour = "grey40", inherit.aes = FALSE) +
-  geom_text(data = budget_df, aes(x = 2020, y = y, label = lbl),
-            hjust = 0, vjust = -0.45, size = 4.7, colour = "grey35", inherit.aes = FALSE) +
-  scale_colour_manual(values = scen_col_lbl, name = NULL) +
-  scale_fill_manual(  values = scen_col_lbl, name = NULL) +
-  scale_x_continuous(breaks = x_breaks_co2) +
-  labs(title = "(c) Cumulative CO\u2082 from 2020", x = NULL, y = "Gt CO\u2082") +
-  guides(colour = guide_legend(ncol = 2, override.aes = list(fill = NA)), fill = "none") +
-  theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
-        aspect.ratio = 1)
-
-# ── Panel (d): ERF or non-CO₂ GHG ────────────────────────────
+# ── Panel (c): ERF or non-CO₂ GHG ────────────────────────────
 if (!is.null(d_band)) {
-  p_d <- ggplot(d_band,
+  p_c <- ggplot(d_band,
                 aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
     geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
     geom_line(aes(y = med), linewidth = 0.9) +
@@ -467,19 +469,69 @@ if (!is.null(d_band)) {
     scale_fill_manual(  values = scen_col_lbl, name = NULL) +
     scale_x_continuous(breaks = x_breaks_co2) +
     labs(title = d_title, x = NULL, y = d_ylabel) +
-    guides(colour = guide_legend(ncol = 2, override.aes = list(fill = NA)), fill = "none") +
-    theme(legend.position = "none", axis.text.x = element_text(angle = 45, hjust = 1),
+    # this panel carries the scenario colour key for the whole figure
+    guides(colour = guide_legend(nrow = 2, override.aes = list(fill = NA)),
+           fill = "none") +
+    theme(legend.position = "bottom", axis.text.x = element_text(angle = 45, hjust = 1),
           aspect.ratio = 1)
 } else {
-  p_d <- ggplot() +
+  p_c <- ggplot() +
     annotate("text", x = 0.5, y = 0.5,
-             label = "No data available for panel (d)\n(Effective Radiative Forcing)",
+             label = "No data available for panel (c)\n(Effective Radiative Forcing)",
              size = 6.0, colour = "grey55", hjust = 0.5, vjust = 0.5) +
     scale_x_continuous(limits = c(0, 1)) + scale_y_continuous(limits = c(0, 1)) +
     labs(title = d_title, x = NULL, y = NULL) +
     theme(axis.text = element_blank(), axis.ticks = element_blank(),
           panel.grid = element_blank(), aspect.ratio = 1)
 }
+
+# ── Panel (d): cumulative CO₂ 2020-2100, one point per model ──
+# The median collapses the Shifted Ambition / Tech Momentum difference because
+# a different model sits at the median in each; the model budgets do not.
+cum_2100 <- co2_cumul_mod %>%
+  filter(year == max(year)) %>%
+  mutate(model_short = ifelse(model %in% names(model_short_names),
+                              model_short_names[model], model)) %>%
+  mutate(model_short = factor(model_short, levels = sort(unique(model_short))),
+         scenario    = factor(scenario,    levels = scen_lbl_levels))
+
+message("\nCumulative CO2 2020-2100 by model (Gt CO2):")
+print(as.data.frame(
+  cum_2100 %>% select(model_short, scenario, cumulative) %>%
+    tidyr::pivot_wider(names_from = scenario, values_from = cumulative) %>%
+    mutate(across(where(is.numeric), ~ round(.x)))))
+message("Cross-model median of the model budgets:")
+print(as.data.frame(co2_cumul_band %>% filter(year == max(year)) %>%
+                    select(scenario, med) %>% mutate(med = round(med))))
+
+shape_vals_cum <- c(15, 16, 17, 18, 4, 1, 0)[seq_len(nlevels(cum_2100$model_short))]
+
+# the cross-model median of the model budgets: the value quoted in the text
+cum_med <- cum_2100 %>%
+  group_by(scenario) %>%
+  summarise(med = median(cumulative, na.rm = TRUE), .groups = "drop")
+
+p_d <- ggplot(cum_2100, aes(x = scenario, y = cumulative)) +
+  geom_hline(data = budget_df, aes(yintercept = y),
+             linewidth = 0.45, linetype = "dashed", colour = "grey40",
+             inherit.aes = FALSE) +
+  geom_text(data = budget_df, aes(x = -Inf, y = y, label = lbl),
+            hjust = -0.05, vjust = -0.45, size = 4.7, colour = "grey35",
+            inherit.aes = FALSE) +
+  geom_text(data = cum_med,
+            aes(x = scenario, y = med, label = round(med), colour = scenario),
+            hjust = 0.5, vjust = -0.6, size = 5.0, fontface = "bold",
+            inherit.aes = FALSE) +
+  geom_point(aes(colour = scenario, shape = model_short, group = model_short),
+             size = 3.6, stroke = 1.0,
+             position = position_dodge(width = 0.8)) +
+  scale_colour_manual(values = scen_col_lbl, guide = "none") +
+  scale_shape_manual(values = shape_vals_cum, name = NULL) +
+  scale_x_discrete(labels = function(x) gsub(" ", "\n", x)) +
+  labs(title = "(d) Cumulative CO\u2082 2020\u20132100 by model",
+       x = NULL, y = "Gt CO\u2082") +
+  guides(shape = guide_legend(nrow = 2)) +
+  theme(legend.position = "bottom", aspect.ratio = 1)
 
 # ══════════════════════════════════════════════════════════════
 # 5. COMBINE AND SAVE
