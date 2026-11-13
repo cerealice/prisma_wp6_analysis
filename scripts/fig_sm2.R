@@ -2,6 +2,7 @@ library(tidyverse)
 library(arrow)
 library(patchwork)
 library(jsonlite)
+library(ggh4x)
 
 # ══════════════════════════════════════════════════════════════
 # PURPOSE — post-Oct-15 supplementary figure SM2
@@ -76,13 +77,17 @@ cluster_map <- c(
 cluster_order <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent Economies")
 all_regions   <- c("World", r10_regions)
 
+# Cluster strip fills — order matches cluster_order
+cl_strip_fills <- lapply(cluster_order,
+                         function(cl) element_text(colour = "black", face = "bold"))
+
 all_years <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
 
 # ── Theme ──────────────────────────────────────────────────────
 theme_set(
   theme_bw(base_size = 20, base_family = "Arial") +
     theme(
-      plot.title       = element_text(size = 20.0, face = "bold", hjust = 0.5),
+      plot.title       = element_text(size = 20.0, face = "bold", hjust = 0),
       axis.title       = element_text(size = 18.5),
       axis.text        = element_text(size = 17.0),
       axis.text.x      = element_text(angle = 45, hjust = 1),
@@ -274,9 +279,10 @@ legend_guide <- guides(
 p_a <- ggplot(co2_band,
               aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
   geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", colour = "grey50") +
-  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, colour = NA) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
   geom_line(aes(y = med), linewidth = 0.9) +
-  facet_wrap(~ cluster, ncol = 3, scales = "free_y") +
+  facet_wrap2(~ cluster, ncol = 3, scales = "free_y",
+              strip = strip_themed(text_x = cl_strip_fills)) +
   scale_colour_manual(values = scen_col_lbl, name = NULL) +
   scale_fill_manual(  values = scen_col_lbl, name = NULL) +
   scale_x_continuous(breaks = x_breaks) +
@@ -289,9 +295,10 @@ p_a <- ggplot(co2_band,
 p_b <- ggplot(ch4_band,
               aes(x = year, colour = scenario, fill = scenario, group = scenario)) +
   geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", colour = "grey50") +
-  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, colour = NA) +
+  geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, linewidth = 0.25) +
   geom_line(aes(y = med), linewidth = 0.9) +
-  facet_wrap(~ cluster, ncol = 3, scales = "free_y") +
+  facet_wrap2(~ cluster, ncol = 3, scales = "free_y",
+              strip = strip_themed(text_x = cl_strip_fills)) +
   scale_colour_manual(values = scen_col_lbl, name = NULL) +
   scale_fill_manual(  values = scen_col_lbl, name = NULL) +
   scale_x_continuous(breaks = x_breaks) +

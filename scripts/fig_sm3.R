@@ -378,7 +378,7 @@ if (use_erf) {
   d_raw    <- erf_raw %>% filter(model %in% m_ok) %>%
     mutate(scenario = unname(scenario_labels[as.character(scenario)]))
   d_ylabel <- "W/m\u00b2"
-  d_title  <- "(c) Effective radiative forcing"
+  d_title  <- "(d) Effective radiative forcing"
 } else if (!is.null(kghg_raw) && nrow(kghg_raw) > 0) {
   co2_for_d <- co2_raw %>% filter(model %in% m_ok, region == "World") %>%
     mutate(value = value / 1000, scenario = as.character(scenario)) %>%
@@ -393,11 +393,11 @@ if (use_erf) {
            scenario = unname(scenario_labels[scenario])) %>%
     select(model, scenario, year, value)
   d_ylabel <- "Gt CO\u2082-eq/yr"
-  d_title  <- "(c) Non-CO\u2082 GHG emissions"
+  d_title  <- "(d) Non-CO\u2082 GHG emissions"
 } else {
   d_raw    <- NULL
   d_ylabel <- ""
-  d_title  <- "(c) Effective radiative forcing"
+  d_title  <- "(d) Effective radiative forcing"
 }
 
 if (!is.null(d_raw) && nrow(d_raw) > 0) {
@@ -421,9 +421,7 @@ x_breaks_co2 <- c(2020, seq(2040, 2100, by = 20))
 
 # ── Panel (a): T_median (p50) ─────────────────────────────────
 p_a <- ggplot(web_ts_p50, aes(x = year, colour = scenario, fill = scenario)) +
-  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, colour = NA) +
-  geom_line(aes(y = ts_min), linewidth = 0.45, alpha = 0.6) +
-  geom_line(aes(y = ts_max), linewidth = 0.45, alpha = 0.6) +
+  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, linewidth = 0.25) +
   geom_line(data = semi_join(gsat, central_p50, by = c("scenario", "model")),
             aes(x = year, y = p50, group = interaction(model, scenario)), linewidth = 1.1) +
   geom_point(data = peak_p50, aes(x = year, y = p50),
@@ -441,9 +439,7 @@ p_a <- ggplot(web_ts_p50, aes(x = year, colour = scenario, fill = scenario)) +
 
 # ── Panel (b): T_67th (p67) ───────────────────────────────────
 p_b <- ggplot(web_ts_p67, aes(x = year, colour = scenario, fill = scenario)) +
-  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, colour = NA) +
-  geom_line(aes(y = ts_min), linewidth = 0.45, alpha = 0.6) +
-  geom_line(aes(y = ts_max), linewidth = 0.45, alpha = 0.6) +
+  geom_ribbon(aes(ymin = ts_min, ymax = ts_max), alpha = 0.18, linewidth = 0.25) +
   geom_line(data = semi_join(gsat, central_p67, by = c("scenario", "model")),
             aes(x = year, y = p67, group = interaction(model, scenario)), linewidth = 1.1) +
   geom_point(data = peak_p67, aes(x = year, y = p67),
@@ -506,18 +502,22 @@ print(as.data.frame(co2_cumul_band %>% filter(year == max(year)) %>%
 
 shape_vals_cum <- c(15, 16, 17, 18, 4, 1, 0)[seq_len(nlevels(cum_2100$model_short))]
 
-# the cross-model median of the model budgets: the value quoted in the text
+# the cross-model mean of the model budgets (all models incl. IMACLIM)
 cum_med <- cum_2100 %>%
   group_by(scenario) %>%
-  summarise(med = median(cumulative, na.rm = TRUE), .groups = "drop")
+  summarise(med = mean(cumulative, na.rm = TRUE), .groups = "drop")
 
 p_d <- ggplot(cum_2100, aes(x = scenario, y = cumulative)) +
+  geom_segment(data = cum_med,
+               aes(x = as.integer(scenario) - 0.4, xend = as.integer(scenario) + 0.4,
+                   y = med, yend = med, colour = scenario),
+               linewidth = 1.5, inherit.aes = FALSE) +
   geom_hline(data = budget_df, aes(yintercept = y),
-             linewidth = 0.45, linetype = "dashed", colour = "grey40",
+             linetype = "dotted", colour = "grey40", linewidth = 0.6,
              inherit.aes = FALSE) +
-  geom_text(data = budget_df, aes(x = -Inf, y = y, label = lbl),
-            hjust = -0.05, vjust = -0.45, size = 4.7, colour = "grey35",
-            inherit.aes = FALSE) +
+  geom_text(data = budget_df, aes(y = y, label = lbl),
+            x = Inf, hjust = 1.05, vjust = -0.4,
+            size = 4.0, colour = "grey40", inherit.aes = FALSE) +
   geom_text(data = cum_med,
             aes(x = scenario, y = med, label = round(med), colour = scenario),
             hjust = 0.5, vjust = -0.6, size = 5.0, fontface = "bold",
@@ -528,7 +528,7 @@ p_d <- ggplot(cum_2100, aes(x = scenario, y = cumulative)) +
   scale_colour_manual(values = scen_col_lbl, guide = "none") +
   scale_shape_manual(values = shape_vals_cum, name = NULL) +
   scale_x_discrete(labels = function(x) gsub(" ", "\n", x)) +
-  labs(title = "(d) Cumulative CO\u2082 2020\u20132100 by model",
+  labs(title = "(c) Cumulative CO\u2082 2020\u20132100 by model",
        x = NULL, y = "Gt CO\u2082") +
   guides(shape = guide_legend(nrow = 2)) +
   theme(legend.position = "bottom", aspect.ratio = 1)
@@ -536,7 +536,7 @@ p_d <- ggplot(cum_2100, aes(x = scenario, y = cumulative)) +
 # ══════════════════════════════════════════════════════════════
 # 5. COMBINE AND SAVE
 # ══════════════════════════════════════════════════════════════
-fig <- (p_a | p_b) / (p_c | p_d)
+fig <- (p_a | p_b) / (p_d | p_c)
 
 out_file <- file.path(graphs_dir, "fig_sm3.png")
 ggsave(out_file, fig, width = 16, height = 14, dpi = 300)

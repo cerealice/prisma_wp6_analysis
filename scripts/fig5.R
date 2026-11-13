@@ -2,16 +2,16 @@ library(tidyverse)
 library(arrow)
 library(jsonlite)
 library(patchwork)
+library(ggh4x)
 
 # ══════════════════════════════════════════════════════════════
 # PURPOSE — figure 5
 #   Two panels, 3 clusters each (no Late Reawakening):
 #     (a) Renewable electricity share (% of total electricity generation)
 #     (b) Electricity share in final energy (%)
-#   Bar = cross-model median; points = individual models (short names).
-#   Labels on non-Meet bars: % change vs Meet Aspirations.
-#   Years: 2030 and 2050.
-#   R10 regions summed within cluster before computing share.
+#   Bar order: Shifted Ambition / Tech Momentum / Meet Aspirations.
+#   Dashed reference line at Shifted Ambition cross-model median per year × cluster.
+#   Labels show % increase vs Shifted Ambition.
 #
 # Output: graphs/fig5.png
 # ══════════════════════════════════════════════════════════════
@@ -39,9 +39,9 @@ all_scenarios <- c(
 ma_scen <- "SSP2 - Meet Aspirations"
 
 scenario_levels <- c(
-  "SSP2 - Meet Aspirations",
+  "SSP2 - Asymmetric Roll-Back",
   "SSP2 - Staying Alive",
-  "SSP2 - Asymmetric Roll-Back"
+  "SSP2 - Meet Aspirations"
 )
 scenario_labels <- c(
   "SSP2 - Meet Aspirations"     = "Meet Aspirations",
@@ -78,6 +78,10 @@ prisma_map <- tibble(
   )
 )
 cluster_levels <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent Economies")
+
+# Cluster strip fills — order matches cluster_levels
+cl_strip_fills <- lapply(cluster_levels,
+                         function(cl) element_text(colour = "black", face = "bold"))
 
 # ── Variables ──────────────────────────────────────────────────
 # Panel (a): renewable electricity = numerator components / total electricity
@@ -202,7 +206,7 @@ fe_raw <- load_pq("fig4alt_fe_r10") %>%
 # ══════════════════════════════════════════════════════════════
 get_models <- function(df) {
   df %>% pull(model) %>% as.character() %>% unique() %>%
-    setdiff(c("WITCH 6.0-EU28", "IMACLIM 2.0")) %>% filter_latest_remind() %>% sort()
+    setdiff("WITCH 6.0-EU28") %>% filter_latest_remind() %>% sort()
 }
 all_models_se <- get_models(se_raw)
 all_models_fe <- get_models(fe_raw)
@@ -283,15 +287,17 @@ prep_summary <- function(dots_df) {
     summarise(median_val = median(value, na.rm = TRUE), .groups = "drop")
 }
 
+shift_scen <- "SSP2 - Asymmetric Roll-Back"
+
 prep_labels <- function(summary_df) {
-  meet_ref <- summary_df %>%
-    filter(as.character(scenario) == ma_scen) %>%
-    select(year_f, cluster, meet_val = median_val)
+  shift_ref <- summary_df %>%
+    filter(as.character(scenario) == shift_scen) %>%
+    select(year_f, cluster, ref_val = median_val)
   summary_df %>%
-    left_join(meet_ref, by = c("year_f", "cluster")) %>%
+    left_join(shift_ref, by = c("year_f", "cluster")) %>%
     mutate(
-      pct_chg    = (median_val - meet_val) / meet_val * 100,
-      label_text = ifelse(as.character(scenario) == ma_scen, "",
+      pct_chg    = (median_val - ref_val) / ref_val * 100,
+      label_text = ifelse(as.character(scenario) == shift_scen, "",
                           sprintf("%+.0f%%", pct_chg))
     )
 }
@@ -305,14 +311,90 @@ summary_b <- prep_summary(dots_b)
 labels_b  <- prep_labels(summary_b)
 
 # ══════════════════════════════════════════════════════════════
+# PRINTOUT — exact values behind the bars and the % labels
+# ══════════════════════════════════════════════════════════════
+tm_scen <- "SSP2 - Staying Alive"
+
+report_panel <- function(summary_df, dots_df, nm) {
+  wide <- summary_df %>%
+    select(year_f, cluster, scenario, median_val) %>%
+    tidyr::pivot_wider(names_from = scenario, values_from = median_val)
+
+  message("\n================ ", nm, " ================")
+  message("-- cross-model MEDIAN by cluster, year, scenario --")
+  print(as.data.frame(wide), digits = 3)
+
+  message("-- % change vs SHIFTED AMBITION (what the labels show) --")
+  print(as.data.frame(
+    wide %>% transmute(year_f, cluster,
+      TM_vs_SA = (.data[[tm_scen]] - .data[[shift_scen]]) / .data[[shift_scen]] * 100,
+      MA_vs_SA = (.data[[ma_scen]] - .data[[shift_scen]]) / .data[[shift_scen]] * 100)
+  ), digits = 3)
+
+  message("-- PAIRED: median of within-model % changes (what the labels show) --")
+  pr <- function(ref_scen, lbl) {
+    r <- dots_df %>% filter(as.character(scenario) == ref_scen) %>%
+      select(year_f, cluster, model, ref_val = value)
+    message("   ... vs ", lbl, ":")
+    print(as.data.frame(
+      dots_df %>% left_join(r, by = c("year_f", "cluster", "model")) %>%
+        filter(!is.na(ref_val), ref_val != 0, !is.na(value)) %>%
+        mutate(pc = (value - ref_val) / ref_val * 100) %>%
+        group_by(year_f, cluster, scenario) %>%
+        summarise(median_pc = median(pc), n_below = sum(pc < 0), n = n(),
+                  .groups = "drop")), digits = 3)
+  }
+  pr(shift_scen, "Shifted Ambition")
+  pr(ma_scen,    "Meet Aspirations")
+
+  message("-- % change vs MEET ASPIRATIONS (difference of medians, for comparison) --")
+  print(as.data.frame(
+    wide %>% transmute(year_f, cluster,
+      SA_vs_MA = (.data[[shift_scen]] - .data[[ma_scen]]) / .data[[ma_scen]] * 100,
+      TM_vs_MA = (.data[[tm_scen]]    - .data[[ma_scen]]) / .data[[ma_scen]] * 100)
+  ), digits = 3)
+
+  mw <- dots_df %>%
+    filter(as.character(year_f) == "2050") %>%
+    select(cluster, model, scenario, value) %>%
+    tidyr::pivot_wider(names_from = scenario, values_from = value)
+
+  message("-- 2050 by MODEL: Tech Momentum minus Meet Aspirations --")
+  print(as.data.frame(
+    mw %>% mutate(TM_minus_MA = .data[[tm_scen]] - .data[[ma_scen]],
+                  TM_below_MA = TM_minus_MA < 0)
+  ), digits = 3)
+
+  message("-- count of models with TM below MA, 2050 --")
+  print(as.data.frame(
+    mw %>% group_by(cluster) %>%
+      summarise(n_TM_below_MA = sum(.data[[tm_scen]] < .data[[ma_scen]], na.rm = TRUE),
+                n_models = sum(!is.na(.data[[tm_scen]]) & !is.na(.data[[ma_scen]])),
+                .groups = "drop")
+  ))
+}
+
+report_panel(summary_a, dots_a, "(a) Renewable electricity share")
+report_panel(summary_b, dots_b, "(b) Electricity share in final energy")
+
+# ══════════════════════════════════════════════════════════════
 # 5. PLOT
 # ══════════════════════════════════════════════════════════════
 dodge <- position_dodge(width = 0.7)
 
 make_panel <- function(summary_df, dots_df, labels_df, title_str, y_label) {
+  shift_seg <- summary_df %>%
+    filter(as.character(scenario) == shift_scen) %>%
+    mutate(x_ctr = as.numeric(year_f))
+
   ggplot(summary_df,
          aes(x = year_f, y = median_val, fill = scenario, group = scenario)) +
     geom_col(position = dodge, width = 0.65, alpha = 0.85) +
+    geom_segment(data = shift_seg,
+                 aes(x = x_ctr - 0.35, xend = x_ctr + 0.35,
+                     y = median_val, yend = median_val),
+                 colour = "black", linetype = "dashed",
+                 linewidth = 0.5, inherit.aes = FALSE) +
     geom_point(data = dots_df,
                aes(y = value, shape = model_lbl, group = scenario),
                colour = "black", size = 2.8, alpha = 0.45, position = dodge) +
@@ -323,7 +405,8 @@ make_panel <- function(summary_df, dots_df, labels_df, title_str, y_label) {
               colour = "grey20", inherit.aes = FALSE) +
     scale_fill_manual(values = scenario_colors, labels = scenario_labels, name = "Scenario") +
     scale_shape_manual(values = model_shapes, name = "Model") +
-    facet_wrap(~ cluster, nrow = 1) +
+    facet_wrap2(~ cluster, nrow = 1,
+                strip = strip_themed(text_x = cl_strip_fills)) +
     labs(title = title_str, x = NULL, y = y_label) +
     guides(
       fill  = guide_legend(order = 1, ncol = 1),

@@ -18,8 +18,8 @@ CAPTIONS <- list(
     text  = paste0(
       "Supplementary Figure SM1 | PRISMA WP6 country cluster assignments. ",
       "World map showing the assignment of countries to the three PRISMA clusters: ",
-      "Transition Leaders (blue), Diversifying Economies (orange), and ",
-      "Fossil-Dependent Economies (green). ",
+      "Transition Leaders (green), Diversifying Economies (blue), and ",
+      "Fossil-Dependent Economies (orange). ",
       "Solid fill = data-confirmed assignment; hatching (////) = cluster assumed ",
       "from partial data (at least one of fossil wealth, renewables growth, or GHG ",
       "intensity missing). ",
@@ -65,13 +65,15 @@ CAPTIONS <- list(
     label = "Figure 3",
     text  = paste0(
       "Figure 3 | Economic impacts across PRISMA scenarios. ",
-      "(a) Annual GDP relative to the Meet Aspirations scenario, 2020-2100. ",
-      "Solid lines show undamaged GDP; dashed lines show damage-adjusted GDP using the ",
-      "Howard & Sterner damage function applied to the global mean surface temperature (T67). ",
-      "Bold black line denotes the cross-model mean. Only models with endogenous GDP are shown. ",
-      "(b) Net Present Value (NPV) of GDP relative to Meet Aspirations, aggregated over ",
-      "2020-2100, global totals. ",
-      "(c) NPV of GDP relative to Meet Aspirations by PRISMA cluster. ",
+      "(a) Annual GDP under Shifted Ambition relative to Meet Aspirations, 2020-2100. ",
+      "Dashed lines show undamaged GDP; solid lines show damage-adjusted GDP using the ",
+      "Howard & Sterner damage function applied to the 67th percentile global mean surface ",
+      "temperature (T67). Only models with endogenous GDP are shown. ",
+      "(b) Net present value of GDP relative to Meet Aspirations aggregated over 2020-2100 ",
+      "at a 2% discount rate, at the 67th-percentile temperature (T67), shown for global ",
+      "totals (left) and by PRISMA regional cluster (right). ",
+      "Error bars span Q10-Q90 of the damage-function coefficient uncertainty over 5,000 ",
+      "Monte Carlo draws. The thick grey horizontal line shows the cross-model median. ",
       "Damage function: D(T) = alpha * T^1.5 + beta * T (Howard & Sterner)."
     )
   ),

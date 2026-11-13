@@ -114,7 +114,7 @@ scenario_labels <- c(
 # PRISMA cluster colors — matched to the country-cluster map figure.
 # Distinct from scenario_colors by design.
 cluster_colors <- c(
-  "Transition leaders"          = "#7B9CC8",   # periwinkle blue
-  "Diversifying economies"      = "#F4874B",   # warm orange
-  "Fossil-dependent economies"  = "#2CBD9E"    # teal
+  "Transition Leaders"          = "#2A9D8F",   # teal
+  "Diversifying Economies"      = "#7B9CC8",   # periwinkle blue
+  "Fossil-Dependent Economies"  = "#F4874B"    # warm orange
 )

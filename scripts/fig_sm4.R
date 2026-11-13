@@ -235,7 +235,7 @@ models_gsat <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value) %>%
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean) %>%
   filter(!is.na(p67)) %>%
   pull(model) %>% as.character() %>% unique()
 
@@ -265,7 +265,7 @@ web_gsat_all <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value)
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean)
 
 # ══════════════════════════════════════════════════════════════
 # 3. PRE-COMPUTE DAMAGE MATRICES  (once per model × scenario)
@@ -408,9 +408,8 @@ if (nrow(all_pos_df) > 0) {
 # ══════════════════════════════════════════════════════════════
 # 6. PLOT
 # ══════════════════════════════════════════════════════════════
-model_colors_sm <- setNames(
-  scales::hue_pal(l = 55, c = 100)(n_mods), mod_short_levels
-)
+custom_pal      <- c("#A41623", "#5B1865", "#E2C044", "#718F94")
+model_colors_sm <- setNames(rep_len(custom_pal, n_mods), mod_short_levels)
 
 cross_in_range <- crossing_pts %>%
   filter(!is.na(disc_cross), disc_cross >= min(DISC_RATES_FINE))
@@ -430,7 +429,7 @@ p <- ggplot(results_dr,
              linewidth = 0.5, colour = "grey65") +
   # MC uncertainty band (Q10–Q90)
   geom_ribbon(aes(ymin = q10_pct, ymax = q90_pct, fill = model_short),
-              alpha = 0.07, colour = NA) +
+              alpha = 0.07, linewidth = 0.25) +
   # Median lines
   geom_line(linewidth = 0.9) +
   # Zero-crossing markers (✕ at y = 0)

@@ -29,9 +29,9 @@ fill_tech    <- "#EAF4FC"
 fill_shifted <- "#F0F0F0"
 
 # ── Cluster colours — must match fig_sm1 (country cluster map) ──
-col_leaders <- "#6B7FD7"   # transition leaders
-col_divers  <- "#F0885C"   # diversifying economies
-col_fossil  <- "#45BE9B"   # fossil-dependent economies
+col_leaders <- "#5A9B5A"   # transition leaders — green
+col_divers  <- "#7B9CC8"   # diversifying economies — blue
+col_fossil  <- "#F4874B"   # fossil-dependent economies — orange
 
 # ── Panel b geometry ───────────────────────────────────────────
 # Panel b lives on the same canvas as panel a, to the right of

@@ -231,7 +231,12 @@ load_pq <- function(prefix) {
       message("Using backup data for '", prefix, "' (no fresh download found).")
   }
   if (length(files) == 0) stop("No data found for '", prefix, "'. Run download manually.")
-  read_parquet(files[which.max(file.info(files)$mtime)])
+  df <- read_parquet(files[which.max(file.info(files)$mtime)])
+  df$model    <- as.character(df$model)
+  df$scenario <- as.character(df$scenario)
+  df$region   <- as.character(df$region)
+  df$variable <- as.character(df$variable)
+  df
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -260,6 +265,41 @@ gdp_raw <- bind_rows(
 ) %>% filter(!is.na(value))
 gdp_raw <- fix_gem_e3_years(gdp_raw)
 
+# Fallback: aggregate World from R10 regions if no World-level data
+if (nrow(gdp_raw) == 0) {
+  r10_regions_sm5 <- c(
+    "Africa (R10)", "China+ (R10)", "Europe (R10)", "India+ (R10)",
+    "Latin America (R10)", "Middle East (R10)", "North America (R10)",
+    "Other (R10)", "Pacific OECD (R10)", "Reforming Economies (R10)",
+    "Rest of Asia (R10)"
+  )
+  run_python_download("GDP|MER", "gdp_mer_r10", regions_vec = r10_regions_sm5)
+  run_python_download("GDP|PPP", "gdp_ppp_r10", regions_vec = r10_regions_sm5)
+  gdp_mer_r10 <- tryCatch(
+    load_pq("gdp_mer_r10") %>%
+      filter(variable == "GDP|MER", region %in% r10_regions_sm5, scenario %in% all_scenarios),
+    error = function(e) NULL
+  )
+  gdp_ppp_r10 <- tryCatch(
+    load_pq("gdp_ppp_r10") %>%
+      filter(variable == "GDP|PPP", region %in% r10_regions_sm5, scenario %in% all_scenarios),
+    error = function(e) NULL
+  )
+  models_mer_r10 <- if (!is.null(gdp_mer_r10)) unique(as.character(gdp_mer_r10$model)) else character(0)
+  gdp_r10 <- bind_rows(
+    gdp_mer_r10,
+    if (!is.null(gdp_ppp_r10)) filter(gdp_ppp_r10, !model %in% models_mer_r10) else NULL
+  ) %>% filter(!is.na(value))
+  gdp_r10 <- fix_gem_e3_years(gdp_r10)
+  if (nrow(gdp_r10) > 0) {
+    message("World GDP empty \u2014 aggregating from R10 regions.")
+    gdp_raw <- gdp_r10 %>%
+      group_by(model, scenario, variable, year) %>%
+      summarise(value = sum(value, na.rm = TRUE), .groups = "drop") %>%
+      mutate(region = "World")
+  }
+}
+
 # ── GSAT (p50 and p67, reuse climate_assess_full parquet) ─────
 ca_backup_dir <- file.path(project_dir, "data", "climate_assessment")
 ca_files <- list.files(direct_dir, "^climate_assess_full_.*\\.parquet$", full.names = TRUE)
@@ -280,7 +320,7 @@ gsat_raw <- read_parquet(ca_files[which.max(file.info(ca_files)$mtime)]) %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value) %>%
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean) %>%
   filter(!is.na(p50), !is.na(p67))
 
 # ══════════════════════════════════════════════════════════════
@@ -314,7 +354,7 @@ candidates <- filter_latest_remind(
 # (b): must have Meet Aspirations in GDP
 has_meet_gdp <- function(m)
   any(gdp_raw$model == m & gdp_raw$scenario == ma_scen & !is.na(gdp_raw$value))
-candidates <- candidates[sapply(candidates, has_meet_gdp)]
+candidates <- candidates[vapply(candidates, has_meet_gdp, logical(1))]
 
 # (c): endogenous GDP — World level
 meet_w <- gdp_raw %>%
@@ -332,6 +372,10 @@ use_models <- filter_latest_remind(sort(intersect(candidates, endo_w)))
 
 message("Candidates with GSAT+GDP: ", paste(candidates, collapse = ", "))
 message("After endogenous GDP filter: ", paste(use_models, collapse = ", "))
+
+if (length(use_models) == 0)
+  stop("No models passed all filters (GSAT + GDP + endogenous GDP). ",
+       "Check that climate_assess_full parquet is present and covers the needed scenarios.")
 
 gsat_all <- gsat_raw %>% filter(model %in% use_models)
 gdp_all  <- gdp_raw  %>% filter(model %in% use_models)
@@ -434,15 +478,13 @@ message(sprintf("Results: %d rows (%d models \u00d7 %d scenarios \u00d7 %d fns)"
                 n_distinct(results$fn_id)))
 
 # ══════════════════════════════════════════════════════════════
-# 4. AESTHETICS  (match fig3.R)
+# 4. AESTHETICS  (match fig3.R panel b — T₆₇ only)
 # ══════════════════════════════════════════════════════════════
 
 mod_short_levels <- levels(results$model_short)
 n_mods           <- length(mod_short_levels)
-model_colors     <- setNames(
-  scales::hue_pal(l = 55, c = 100)(n_mods),
-  mod_short_levels
-)
+custom_pal       <- c("#A41623", "#5B1865", "#E2C044", "#718F94")
+model_colors     <- setNames(rep_len(custom_pal, n_mods), mod_short_levels)
 
 spread  <- min(0.28, n_mods * 0.07)
 offsets <- setNames(
@@ -450,108 +492,76 @@ offsets <- setNames(
   mod_short_levels
 )
 
-x_v1 <- 1L   # T₅₀
-x_v3 <- 2L   # T₆₇
-
 plot_df <- results %>%
-  mutate(
-    x_v1   = x_v1 + offsets[as.character(model_short)],
-    x_v3   = x_v3 + offsets[as.character(model_short)],
-    lbl_v1 = sprintf("%+.1f%%", q50_v1),
-    lbl_v3 = sprintf("%+.1f%%", q50_v3)
-  )
+  mutate(x_dot = offsets[as.character(model_short)])
 
-# Split: functions with vs without MC uncertainty
-plot_mc    <- filter(plot_df, has_mc)
-plot_no_mc <- filter(plot_df, !has_mc)
+# Shared y-axis limits across all panels
+ylim_raw <- range(c(plot_df$q10_v3, plot_df$q90_v3), na.rm = TRUE)
+ylim_pad <- diff(ylim_raw) * 0.08
+sm5_ylim <- ylim_raw + c(-ylim_pad, ylim_pad)
+
+# Cross-model median per scenario × damage function panel
+med_df <- plot_df %>%
+  group_by(scenario_lbl, fn_f) %>%
+  summarise(med_val = median(q50_v3, na.rm = TRUE), .groups = "drop")
+
+plot_mc <- filter(plot_df, has_mc)
 
 # ══════════════════════════════════════════════════════════════
-# 5. THEME
+# 5. THEME  (match fig3.R)
 # ══════════════════════════════════════════════════════════════
 
 theme_set(
-  theme_bw(base_size = 16, base_family = "Arial") +
+  theme_bw(base_size = 20, base_family = "Arial") +
     theme(
-      plot.title         = element_text(size = 18, face = "bold"),
-      axis.title         = element_text(size = 15),
-      axis.text.y        = element_text(size = 14),
-      axis.text.x        = element_text(size = 15, face = "bold"),
+      axis.title         = element_text(size = 18),
+      axis.text.y        = element_text(size = 16),
+      axis.text.x        = element_blank(),
+      axis.ticks.x       = element_blank(),
       strip.background   = element_blank(),
-      strip.text.x       = element_text(size = 13.5, face = "bold", lineheight = 1.25),
-      strip.text.y       = element_text(size = 15,   face = "bold", angle = 0),
+      strip.text.x       = element_text(size = 14, face = "bold", lineheight = 1.15),
+      strip.text.y       = element_text(size = 17, face = "bold", angle = 0),
       panel.grid.minor   = element_blank(),
       panel.grid.major.x = element_blank(),
       legend.position    = "bottom",
-      legend.title       = element_text(size = 14.5),
-      legend.text        = element_text(size = 13.5)
+      legend.title       = element_blank(),
+      legend.text        = element_text(size = 17),
+      panel.spacing.x    = unit(0.4, "cm"),
+      strip.placement    = "outside"
     )
 )
 
 # ══════════════════════════════════════════════════════════════
-# 6. PLOT
+# 6. PLOT  (T₆₇ only, fig3 panel b style)
 # ══════════════════════════════════════════════════════════════
 
-p <- ggplot() +
-  # Background rectangles (same as fig3 panel b)
-  annotate("rect", xmin = 0.45, xmax = 1.55, ymin = -Inf, ymax = Inf,
-           fill = "#FFF9C4", alpha = 0.65) +
-  annotate("rect", xmin = 1.55, xmax = 2.55, ymin = -Inf, ymax = Inf,
-           fill = "#FFB6C1", alpha = 0.55) +
-  geom_hline(yintercept = 0, linewidth = 0.4, linetype = "dashed", colour = "grey50") +
-
-  # T₅₀ column — error bars for MC functions (fn2–fn7)
+p <- ggplot(plot_df, aes(x = x_dot, y = q50_v3, colour = model_short)) +
+  geom_hline(yintercept = 0, linewidth = 0.9, linetype = "dashed", colour = "black") +
+  # Cross-model median line and label (like fig3 panel b)
+  geom_hline(data = med_df, aes(yintercept = med_val),
+             colour = "grey45", linewidth = 2.0, linetype = "solid",
+             inherit.aes = FALSE) +
+  geom_text(data = med_df,
+            aes(x = Inf, y = med_val, label = sprintf("%+.1f%%", med_val)),
+            hjust = 1.05, vjust = 1.4,
+            colour = "grey25", size = 4.0, fontface = "bold",
+            inherit.aes = FALSE) +
+  # Error bars for MC functions (fn2–fn7)
   geom_errorbar(data = plot_mc,
-                aes(x = x_v1, ymin = q10_v1, ymax = q90_v1, colour = model_short),
-                width = 0.05, linewidth = 0.8) +
-  geom_point(data = plot_mc,
-             aes(x = x_v1, y = q50_v1, colour = model_short),
-             shape = 16, size = 3.2) +
-  geom_text(data = plot_mc,
-            aes(x = x_v1, y = q50_v1, label = lbl_v1, colour = model_short),
-            hjust = 1.30, size = 5.5, show.legend = FALSE) +
-
-  # T₅₀ column — point only for fixed functions (fn1/fn8/fn9)
-  geom_point(data = plot_no_mc,
-             aes(x = x_v1, y = q50_v1, colour = model_short),
-             shape = 16, size = 3.2) +
-  geom_text(data = plot_no_mc,
-            aes(x = x_v1, y = q50_v1, label = lbl_v1, colour = model_short),
-            hjust = 1.30, size = 5.5, show.legend = FALSE) +
-
-  # T₆₇ column — error bars for MC functions
-  geom_errorbar(data = plot_mc,
-                aes(x = x_v3, ymin = q10_v3, ymax = q90_v3, colour = model_short),
-                width = 0.05, linewidth = 0.8) +
-  geom_point(data = plot_mc,
-             aes(x = x_v3, y = q50_v3, colour = model_short),
-             shape = 16, size = 3.2) +
-  geom_text(data = plot_mc,
-            aes(x = x_v3, y = q50_v3, label = lbl_v3, colour = model_short),
-            hjust = -0.30, size = 5.5, show.legend = FALSE) +
-
-  # T₆₇ column — point only for fixed functions
-  geom_point(data = plot_no_mc,
-             aes(x = x_v3, y = q50_v3, colour = model_short),
-             shape = 16, size = 3.2) +
-  geom_text(data = plot_no_mc,
-            aes(x = x_v3, y = q50_v3, label = lbl_v3, colour = model_short),
-            hjust = -0.30, size = 5.5, show.legend = FALSE) +
-
+                aes(ymin = q10_v3, ymax = q90_v3),
+                width = 0.03, linewidth = 0.8) +
+  geom_point(shape = 16, size = 3.5) +
   facet_grid(scenario_lbl ~ fn_f, scales = "fixed", switch = "y") +
   scale_colour_manual(values = model_colors, name = NULL) +
-  scale_x_continuous(
-    breaks = c(x_v1, x_v3),
-    labels = c("T\u2085\u2080\n(median)", "T\u2086\u2087\n(67th pct)"),
-    expand = expansion(add = 0.55)
-  ) +
+  scale_x_continuous(breaks = NULL, expand = expansion(add = 0.08)) +
+  coord_cartesian(ylim = sm5_ylim) +
   labs(
-    title = "SM7: Damage function sensitivity - GDP NPV vs damage-adjusted Meet Aspirations",
-    x     = NULL,
-    y     = "NPV vs Meet Aspirations (% of damage-adjusted Meet NPV)"
+    x = NULL,
+    y = "NPV vs damage-adjusted Meet Aspirations\n(% of damage-adjusted Meet NPV, T\u2086\u2087)"
   ) +
   guides(colour = guide_legend(
-    nrow = 2, byrow = TRUE,
-    override.aes = list(size = 3)
+    nrow = 1, byrow = TRUE,
+    override.aes = list(size = 3.5)
   ))
 
 # ══════════════════════════════════════════════════════════════

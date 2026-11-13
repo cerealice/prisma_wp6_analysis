@@ -278,13 +278,10 @@ box_data <- bind_rows(peak_p67, end_p67) %>%
   ) %>%
   filter(!is.na(temp_val))
 
-# Median per scenario × timing — for value labels on boxes
+# Median per scenario × timing — for median line and value labels
 med_box <- box_data %>%
   group_by(scen_label, time_type) %>%
-  summarise(med  = median(temp_val, na.rm = TRUE),
-            q75  = quantile(temp_val, 0.75, na.rm = TRUE),
-            .groups = "drop") %>%
-  mutate(label_y = (med + q75) / 2)   # midpoint of upper box half
+  summarise(med = median(temp_val, na.rm = TRUE), .groups = "drop")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -318,38 +315,38 @@ scen_col_text <- c(
 # element_text() requires a plain unnamed vector in factor-level order
 x_label_colours <- unname(scen_col_text[scen_lbl_levels])
 
-# ── Panel (b): boxplot of ensemble 67th percentile + model points ─
+# ── Panel (b): model points + median line ─────────────────────────
 p_b <- ggplot(box_data,
               aes(x      = scen_label,
                   y      = temp_val,
-                  fill   = time_type,
                   colour = time_type,
                   group  = interaction(scen_label, time_type))) +
   geom_hline(yintercept = 2.0, linewidth = 0.6, linetype = "dotted", colour = "black") +
   annotate("text", x = Inf, y = 2.0, label = "2.0\u00b0C",
            hjust = 1.08, vjust = -0.45, size = 5.0, colour = "black") +
-  # Box: quartiles of the 7 model p67 values
-  geom_boxplot(
-    position      = position_dodge(width = 0.65),
-    width         = 0.50, alpha = 0.35,
-    outlier.shape = NA,          # points added explicitly below
-    colour        = "grey25", linewidth = 0.55
+  # Horizontal median line
+  geom_errorbar(
+    data        = med_box,
+    aes(x = scen_label, ymin = med, ymax = med, group = time_type),
+    position    = position_dodge(width = 0.65),
+    width       = 0.45, linewidth = 1.3, colour = "grey25",
+    inherit.aes = FALSE
   ) +
-  # Individual model p67 points overlaid
+  # Individual model p67 points
   geom_point(
     position = position_jitterdodge(dodge.width = 0.65,
                                     jitter.width = 0.10,
                                     seed = 42),
-    size = 2.2, shape = 16, alpha = 0.85
+    size = 2.5, shape = 16, alpha = 0.85
   ) +
-  # Median value label above each box
+  # Median value label above median line
   geom_text(
     data        = med_box,
-    aes(x = scen_label, y = label_y,
+    aes(x = scen_label, y = med,
         label  = sprintf("%.2f\u00b0C", med),
         group  = time_type),
     position    = position_dodge(width = 0.65),
-    vjust       = 0.5, size = 3.5, fontface = "bold",
+    vjust       = -0.8, size = 5.0, fontface = "bold",
     colour      = "black",
     inherit.aes = FALSE
   ) +
@@ -358,17 +355,12 @@ p_b <- ggplot(box_data,
                "Temperature at 2100" = "#A0306A"),
     name   = NULL
   ) +
-  scale_fill_manual(
-    values = c("Peak temperature"    = "#D4820A",
-               "Temperature at 2100" = "#A0306A"),
-    name   = NULL
-  ) +
   scale_x_discrete(labels = scen_labels_wrap) +
   scale_y_continuous(limits = c(1.3, NA),
-                     expand = expansion(mult = c(0.02, 0.07))) +
+                     expand = expansion(mult = c(0.02, 0.10))) +
   labs(title = "(b) Global surface temperature (67th percentile)",
        x = NULL, y = "\u00b0C above 1850\u20131900") +
-  guides(fill = "none") +
+  guides(colour = guide_legend(ncol = 2, override.aes = list(size = 4))) +
   theme(legend.position    = "bottom",
         panel.grid.major.x = element_blank(),
         axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold"))

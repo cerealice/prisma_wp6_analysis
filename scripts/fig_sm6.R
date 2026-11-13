@@ -1,6 +1,7 @@
 library(tidyverse)
 library(arrow)
 library(jsonlite)
+library(ggh4x)
 
 # ══════════════════════════════════════════════════════════════
 # PURPOSE — post-Oct-15 supplementary figure SM6
@@ -54,9 +55,9 @@ scens_nonmeet <- c(
   "SSP2 - Asymmetric Roll-Back"
 )
 scen_labels <- c(
+  "SSP2 - Asymmetric Roll-Back" = "Shifted Ambition",
   "SSP2 - Late Reawakening"     = "Late Reawakening",
-  "SSP2 - Staying Alive"        = "Tech Momentum",
-  "SSP2 - Asymmetric Roll-Back" = "Shifted Ambition"
+  "SSP2 - Staying Alive"        = "Tech Momentum"
 )
 
 gdp_years_std <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
@@ -82,6 +83,10 @@ cluster_map <- c(
   "Rest of Asia (R10)"         = "Diversifying Economies"
 )
 cluster_order <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent Economies")
+
+# Cluster strip fills — order matches cluster_order
+cl_strip_fills <- lapply(cluster_order,
+                         function(cl) element_text(colour = "black", face = "bold"))
 
 # ── Model short names ──────────────────────────────────────────
 model_short_names <- c(
@@ -230,7 +235,7 @@ models_gsat <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value) %>%
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean) %>%
   filter(!is.na(p67)) %>%
   pull(model) %>% as.character() %>% unique()
 
@@ -274,7 +279,7 @@ web_gsat_all <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value) %>%
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean) %>%
   filter(!is.na(p67))
 
 # ══════════════════════════════════════════════════════════════
@@ -341,9 +346,18 @@ ts_cl <- bind_rows(ts_rows) %>%
 # ══════════════════════════════════════════════════════════════
 # 4. PLOT
 # ══════════════════════════════════════════════════════════════
+
+# Min/max envelope across models per facet × line type (like fig3 panel a)
+ts_envelopes_cl <- ts_cl %>%
+  group_by(year, type, line_type, scen_label, cluster) %>%
+  summarise(pct_min = min(pct, na.rm = TRUE),
+            pct_max = max(pct, na.rm = TRUE),
+            .groups = "drop")
+
 mod_short_levels <- sort(unique(ts_cl$model_short))
 n_mods           <- length(mod_short_levels)
-model_colors     <- setNames(scales::hue_pal(l = 55, c = 100)(n_mods), mod_short_levels)
+custom_pal       <- c("#A41623", "#5B1865", "#E2C044", "#718F94")
+model_colors     <- setNames(rep_len(custom_pal, n_mods), mod_short_levels)
 
 p <- ggplot(ts_cl,
             aes(x = year, y = pct,
@@ -351,8 +365,13 @@ p <- ggplot(ts_cl,
                 linetype = line_type,
                 group    = interaction(model_short, type))) +
   geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", colour = "grey50") +
+  geom_ribbon(data = ts_envelopes_cl,
+              aes(x = year, ymin = pct_min, ymax = pct_max, group = type),
+              fill = "grey50", alpha = 0.15, colour = NA,
+              inherit.aes = FALSE) +
   geom_line(linewidth = 0.75, alpha = 0.85) +
-  facet_grid(scen_label ~ cluster) +
+  facet_grid2(scen_label ~ cluster,
+              strip = strip_themed(text_x = cl_strip_fills)) +
   scale_colour_manual(values = model_colors, name = NULL) +
   scale_linetype_manual(
     values = c("Undamaged GDP" = "dashed", "Damage-adjusted GDP" = "solid"),

@@ -2,6 +2,7 @@ library(tidyverse)
 library(arrow)
 library(patchwork)
 library(jsonlite)
+library(ggh4x)
 
 # ══════════════════════════════════════════════════════════════
 # PURPOSE — post-Oct-13 fig 2 / fig SM2 / fig SM3
@@ -86,6 +87,10 @@ cluster_map <- c(
   "Rest of Asia (R10)"         = "Diversifying Economies"
 )
 cluster_order <- c("Transition Leaders", "Diversifying Economies", "Fossil-Dependent Economies")
+
+# Cluster strip fills — order matches cluster_order
+cl_strip_fills <- lapply(unname(cluster_colors[cluster_order]),
+                         function(col) element_text(colour = col, face = "bold"))
 
 # ── Model short names ──────────────────────────────────────────
 model_short_names <- c(
@@ -292,7 +297,7 @@ models_gsat <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value) %>%
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean) %>%
   filter(!is.na(p50), !is.na(p67)) %>%
   pull(model) %>% as.character() %>% unique()
 
@@ -343,7 +348,7 @@ web_gsat_all <- web_raw %>%
   )) %>%
   filter(!is.na(pct_col)) %>%
   select(model, scenario, year, pct_col, value) %>%
-  pivot_wider(names_from = pct_col, values_from = value)
+  pivot_wider(names_from = pct_col, values_from = value, values_fn = mean)
 
 gdp_cluster_all <- gdp_r10_all %>%
   mutate(cluster = cluster_map[region]) %>%
@@ -723,7 +728,6 @@ results_cl <- bind_rows(results_list_cl) %>%
 # ══════════════════════════════════════════════════════════════
 mod_short_levels <- levels(results_w$model_short)
 n_mods           <- length(mod_short_levels)
-model_colors     <- setNames(scales::hue_pal(l = 55, c = 100)(n_mods), mod_short_levels)
 
 spread_w  <- min(0.30, n_mods * 0.07)
 offsets_w <- setNames(seq(-spread_w,  spread_w,  length.out = max(n_mods, 2)), mod_short_levels)
@@ -733,14 +737,62 @@ offsets_cl <- setNames(seq(-spread_cl, spread_cl, length.out = max(n_mods, 2)), 
 x_v1 <- 1L   # T_median column
 x_v3 <- 2L   # T_67th column
 
+# ── Shorten "REMIND X.Y" → "REMIND" ──────────────────────────
+local({
+  old <- grep("^REMIND [0-9]", mod_short_levels, value = TRUE)
+  if (length(old) != 1) return(invisible(NULL))
+  relabel_lvl <- function(x) { levels(x)[levels(x) == old] <- "REMIND"; x }
+  mod_short_levels <<- replace(mod_short_levels, mod_short_levels == old, "REMIND")
+  results_w  <<- results_w  %>% mutate(model_short = relabel_lvl(model_short))
+  results_cl <<- results_cl %>% mutate(model_short = relabel_lvl(model_short))
+  ts_long    <<- ts_long    %>% mutate(model_short = relabel_lvl(model_short))
+  names(offsets_w) [names(offsets_w)  == old] <<- "REMIND"
+  names(offsets_cl)[names(offsets_cl) == old] <<- "REMIND"
+})
+
+# ── Custom model color palette ─────────────────────────────────
+custom_pal   <- c("#A41623", "#5B1865", "#E2C044", "#718F94")
+model_colors <- setNames(rep_len(custom_pal, n_mods), mod_short_levels)
+
+# ── Shared y-range: covers both World and Cluster T₆₇ NPV ─────
+bc_raw  <- range(c(results_w$q10_v3_pct, results_w$q90_v3_pct,
+                   results_cl$q10_v3_pct, results_cl$q90_v3_pct), na.rm = TRUE)
+bc_ypad <- diff(bc_raw) * 0.08
+bc_ylim <- bc_raw + c(-bc_ypad, bc_ypad)
+
+# ── Panel (b) nested strip styling ─────────────────────────────
+bc_strip <- strip_nested(
+  text_x = list(
+    element_blank(),                                                                    # outer: blank for Global
+    element_text(face = "bold"),                                                        # outer: Regional Clusters
+    element_text(),                                                                     # inner: Global
+    element_text(colour = cluster_colors["Transition Leaders"],         face = "bold"), # inner: TL
+    element_text(colour = cluster_colors["Diversifying Economies"],     face = "bold"), # inner: DE
+    element_text(colour = cluster_colors["Fossil-Dependent Economies"], face = "bold")  # inner: FDE
+  )
+)
+
 # ══════════════════════════════════════════════════════════════
 # 7. FIGURE FACTORY
 # ══════════════════════════════════════════════════════════════
 make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
-  message("\n\u2500\u2500 Building: ", label, " \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500")
+  message("\n-- Building: ", label, " --------------")
 
-  # ── Panel (a): GDP timeseries ─────────────────────────────────
-  ts_s  <- ts_long %>% filter(scenario == target_ssp2)
+  # ── Panel (a): GDP timeseries with model-spread ribbon ───────
+  ts_s <- ts_long %>% filter(scenario == target_ssp2)
+
+  ts_envelopes <- ts_s %>%
+    group_by(year, type) %>%
+    summarise(pct_min = min(pct, na.rm = TRUE),
+              pct_max = max(pct, na.rm = TRUE),
+              .groups = "drop")
+
+  message("\n== ", label, " : panel (a), peak and 2100 values by model (%) ==")
+  print(as.data.frame(ts_s %>% group_by(model_short, type) %>%
+          summarise(peak    = max(pct, na.rm = TRUE),
+                    peak_yr = year[which.max(pct)],
+                    v2100   = pct[which.max(year)],
+                    .groups = "drop")), digits = 3)
 
   p_a <- ggplot(ts_s,
                 aes(x = year, y = pct,
@@ -748,11 +800,15 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
                     linetype = line_type,
                     group    = interaction(model_short, type))) +
     geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", colour = "grey50") +
+    geom_ribbon(data = ts_envelopes,
+                aes(x = year, ymin = pct_min, ymax = pct_max, group = type),
+                fill = "grey50", alpha = 0.15, colour = NA,
+                inherit.aes = FALSE) +
     geom_line(linewidth = 0.9) +
     scale_colour_manual(values = model_colors, name = NULL) +
     scale_linetype_manual(
       values = c("Undamaged GDP" = "dashed", "Damage-adjusted GDP" = "solid"),
-      labels = c("Undamaged GDP"     = "Undamaged GDP",
+      labels = c("Undamaged GDP"       = "Undamaged GDP",
                  "Damage-adjusted GDP" = "Damage-adjusted\nGDP for T67"),
       name   = NULL
     ) +
@@ -771,108 +827,103 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
           axis.text.x      = element_text(angle = 45, hjust = 1),
           panel.grid.major = element_line(colour = "grey85", linewidth = 0.3))
 
-  # ── Panel (b): World NPV (T_median | T_67th x-axis) ──────────
-  pdb <- results_w %>%
+  # ── Panel (b): World + Cluster NPV, T₆₇ — nested facets ─────
+  pdb_bc <- results_w %>%
     filter(scenario == target_ssp2) %>%
     mutate(
-      x_dot_v1 = x_v1 + offsets_w[as.character(model_short)],
-      x_dot_v3 = x_v3 + offsets_w[as.character(model_short)],
-      lbl_v1   = sprintf("%+.1f%%", q50_v1_pct),
-      lbl_v3   = sprintf("%+.1f%%", q50_v3_pct)
+      panel_top = " ",
+      panel_sub = "Global",
+      x_dot     = offsets_w[as.character(model_short)],
+      q10 = q10_v3_pct,
+      q50 = q50_v3_pct,
+      q90 = q90_v3_pct
     )
-  p_b <- ggplot() +
-    annotate("rect", xmin = 0.45, xmax = 1.55, ymin = -Inf, ymax = Inf,
-             fill = "#FFF9C4", alpha = 0.65) +
-    annotate("rect", xmin = 1.55, xmax = 2.55, ymin = -Inf, ymax = Inf,
-             fill = "#FFB6C1", alpha = 0.55) +
-    geom_hline(yintercept = 0, linewidth = 0.4, linetype = "dashed", colour = "grey50") +
-    # Per-model: T_median column
-    geom_errorbar(data = pdb,
-                  aes(x = x_dot_v1, ymin = q10_v1_pct, ymax = q90_v1_pct,
-                      colour = model_short),
-                  width = 0.05, linewidth = 0.9) +
-    geom_point(data = pdb, aes(x = x_dot_v1, y = q50_v1_pct, colour = model_short),
-               shape = 16, size = 4.0) +
-    geom_text(data  = pdb, aes(x = x_dot_v1, y = q50_v1_pct, label = lbl_v1,
-                                colour = model_short),
-              hjust = 1.30, size = 4.8, show.legend = FALSE) +
-    # Per-model: T_67th column
-    geom_errorbar(data = pdb,
-                  aes(x = x_dot_v3, ymin = q10_v3_pct, ymax = q90_v3_pct,
-                      colour = model_short),
-                  width = 0.05, linewidth = 0.9) +
-    geom_point(data = pdb, aes(x = x_dot_v3, y = q50_v3_pct, colour = model_short),
-               shape = 16, size = 4.0) +
-    geom_text(data  = pdb, aes(x = x_dot_v3, y = q50_v3_pct, label = lbl_v3,
-                                colour = model_short),
-              hjust = -0.30, size = 4.8, show.legend = FALSE) +
-    scale_colour_manual(values = model_colors, name = NULL) +
-    scale_x_continuous(breaks = c(x_v1, x_v3),
-                       labels = c("T\u2085\u2080\n(median)", "T\u2086\u2087\n(67th pct)"),
-                       expand = expansion(add = 0.55)) +
-    coord_cartesian(ylim = pb_ylim) +
-    labs(
-      title = "(b) GDP NPV global level",
-      x = NULL, y = "NPV vs Meet Aspirations\n(% of damage-adjusted Meet NPV)"
-    ) +
-    guides(colour = "none") +
-    theme(legend.position = "none",
-          axis.text.x     = element_text(size = 15.5, face = "bold"))
 
-  # ── Panel (c): Cluster NPV (T_median | T_67th x-axis) ────────
-  pdc <- results_cl %>%
+  pdc_bc <- results_cl %>%
     filter(scenario == target_ssp2) %>%
     mutate(
-      x_dot_v1 = x_v1 + offsets_cl[as.character(model_short)],
-      x_dot_v3 = x_v3 + offsets_cl[as.character(model_short)],
-      lbl_v1   = sprintf("%+.1f%%", q50_v1_pct),
-      lbl_v3   = sprintf("%+.1f%%", q50_v3_pct)
+      panel_top = "Regional clusters",
+      panel_sub = as.character(cluster),
+      x_dot     = offsets_cl[as.character(model_short)],
+      q10 = q10_v3_pct,
+      q50 = q50_v3_pct,
+      q90 = q90_v3_pct
     )
-  p_c <- ggplot() +
-    annotate("rect", xmin = 0.45, xmax = 1.55, ymin = -Inf, ymax = Inf,
-             fill = "#FFF9C4", alpha = 0.65) +
-    annotate("rect", xmin = 1.55, xmax = 2.55, ymin = -Inf, ymax = Inf,
-             fill = "#FFB6C1", alpha = 0.55) +
-    geom_hline(yintercept = 0, linewidth = 0.35, linetype = "dashed", colour = "grey50") +
-    # Per-model: T_median column
-    geom_errorbar(data = pdc,
-                  aes(x = x_dot_v1, ymin = q10_v1_pct, ymax = q90_v1_pct,
-                      colour = model_short),
-                  width = 0.05, linewidth = 0.8) +
-    geom_point(data = pdc, aes(x = x_dot_v1, y = q50_v1_pct, colour = model_short),
-               shape = 16, size = 3.5) +
-    geom_text(data  = pdc, aes(x = x_dot_v1, y = q50_v1_pct, label = lbl_v1,
-                                colour = model_short),
-              hjust = 1.25, size = 4.3, show.legend = FALSE) +
-    # Per-model: T_67th column
-    geom_errorbar(data = pdc,
-                  aes(x = x_dot_v3, ymin = q10_v3_pct, ymax = q90_v3_pct,
-                      colour = model_short),
-                  width = 0.05, linewidth = 0.8) +
-    geom_point(data = pdc, aes(x = x_dot_v3, y = q50_v3_pct, colour = model_short),
-               shape = 16, size = 3.5) +
-    geom_text(data  = pdc, aes(x = x_dot_v3, y = q50_v3_pct, label = lbl_v3,
-                                colour = model_short),
-              hjust = -0.25, size = 4.3, show.legend = FALSE) +
-    facet_wrap(~ cluster, ncol = 3, scales = "fixed") +
+
+  pd_bc <- bind_rows(
+    pdb_bc %>% select(model_short, panel_top, panel_sub, x_dot, q10, q50, q90),
+    pdc_bc %>% select(model_short, panel_top, panel_sub, x_dot, q10, q50, q90)
+  ) %>%
+    mutate(
+      panel_top = factor(panel_top, levels = c(" ", "Regional clusters")),
+      panel_sub = factor(panel_sub, levels = c("Global", cluster_order))
+    )
+
+  med_df <- pd_bc %>%
+    group_by(panel_top, panel_sub) %>%
+    summarise(med_val = median(q50, na.rm = TRUE), .groups = "drop")
+
+  # ── printed so the text can quote exact values ───────────────
+  message("\n== ", label, " : panel (b), T67 NPV (% of damage-adjusted Meet NPV) ==")
+  print(as.data.frame(pd_bc %>%
+          select(panel_sub, model_short, q50, q10, q90) %>%
+          arrange(panel_sub, model_short)), digits = 3)
+  message("-- cross-model MEDIAN per panel (the grey line and label) --")
+  print(as.data.frame(med_df %>% select(panel_sub, med_val)), digits = 3)
+  message("-- cross-model MEAN per panel (for comparison) --")
+  print(as.data.frame(pd_bc %>% group_by(panel_sub) %>%
+          summarise(mean_val = mean(q50, na.rm = TRUE), .groups = "drop")), digits = 3)
+
+  message("-- both temperature percentiles: T50 (v1) and T67 (v3) --")
+  print(as.data.frame(
+    bind_rows(
+      results_w  %>% filter(scenario == target_ssp2) %>%
+        mutate(panel_sub = "Global"),
+      results_cl %>% filter(scenario == target_ssp2) %>%
+        mutate(panel_sub = as.character(cluster))
+    ) %>%
+      transmute(panel_sub, model_short,
+                T50_q10 = q10_v1_pct, T50_q50 = q50_v1_pct, T50_q90 = q90_v1_pct,
+                T67_q10 = q10_v3_pct, T67_q50 = q50_v3_pct, T67_q90 = q90_v3_pct,
+                T50_below0 = q90_v1_pct < 0, T67_below0 = q90_v3_pct < 0)
+  ), digits = 3)
+
+  p_bc <- ggplot(pd_bc, aes(x = x_dot, y = q50, colour = model_short)) +
+    geom_hline(yintercept = 0, linewidth = 0.9, linetype = "dashed", colour = "black") +
+    geom_hline(data = med_df, aes(yintercept = med_val),
+               colour = "grey45", linewidth = 2.0, linetype = "solid",
+               inherit.aes = FALSE) +
+    geom_text(data = med_df,
+              aes(x = Inf, y = med_val, label = sprintf("%+.1f%%", med_val)),
+              hjust = 1.05, vjust = 1.4,
+              colour = "grey25", size = 5.0, fontface = "bold",
+              inherit.aes = FALSE) +
+    geom_errorbar(aes(ymin = q10, ymax = q90), width = 0.03, linewidth = 0.8) +
+    geom_point(shape = 16, size = 3.5) +
+    facet_nested(. ~ panel_top + panel_sub,
+                 scales    = "free_x",
+                 space     = "free_x",
+                 nest_line = element_line(linewidth = 0.5),
+                 strip     = bc_strip) +
+    scale_x_continuous(breaks = NULL, expand = expansion(add = 0.08)) +
     scale_colour_manual(values = model_colors, name = NULL) +
-    scale_x_continuous(breaks = c(x_v1, x_v3),
-                       labels = c("T\u2085\u2080\n(median)", "T\u2086\u2087\n(67th pct)"),
-                       expand = expansion(add = 0.55)) +
+    coord_cartesian(ylim = bc_ylim) +
     labs(
-      title = "(c) GDP NPV by regional cluster",
-      x = NULL, y = "NPV vs Meet Aspirations\n(% of cluster damage-adjusted Meet NPV)"
+      title = "(b) GDP NPV (T67) vs Meet Aspirations",
+      x = NULL,
+      y = "NPV vs Meet Aspirations\n(% of damage-adjusted Meet NPV)"
     ) +
     guides(colour = "none") +
     theme(legend.position = "none",
-          axis.text.x     = element_text(size = 14.3, face = "bold"))
+          panel.spacing.x = unit(0.5, "cm"),
+          strip.placement = "outside")
 
   # ── Combine & save ────────────────────────────────────────────
-  fig <- (p_a | p_b) / p_c +
-    plot_layout(heights = c(1, 1), widths = c(2, 1))
+  fig <- free(p_a) / p_bc +
+    plot_layout(heights = c(1.3, 1))
 
   out_path <- file.path(graphs_dir, out_file)
-  ggsave(out_path, fig, width = 15, height = 11, dpi = 300)
+  ggsave(out_path, fig, width = 14, height = 13, dpi = 300)
   message("Saved: ", out_path)
 }
 

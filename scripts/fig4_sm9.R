@@ -91,6 +91,7 @@ SPACING_X    <- 0.5
 SPACING_LAST <- 2.0
 
 # Largest single-year fall in global CO2 on record: 2020 pandemic shutdown.
+# Used here as the reference for a decade-mean rate, which is the stricter test.
 COVID_DECLINE <- 2.23
 
 # Brutschin et al. Table 1, indicator 2.1: a fivefold rise per decade.
@@ -526,8 +527,8 @@ indicators <- list(
        }),
 
   # P1 stays GLOBAL: the 2.23 Gt reference is a world figure.
-  list(id = "P1", dim = "Transition pace", name = "Max annual CO\u2082 decline",
-       unit = "Gt CO\u2082/yr", med = COVID_DECLINE, high = COVID_DECLINE,
+  list(id = "P1", dim = "Transition pace", name = "Sustained CO\u2082 decline",
+       unit = "Gt CO\u2082/yr, decade mean", med = COVID_DECLINE, high = COVID_DECLINE,
        fn = function(m, s) {
          if (is.null(reg_raw)) return(na_res())
          co_mat <- sapply(r10_regions, function(r)
@@ -535,11 +536,10 @@ indicators <- list(
          co_w   <- rowSums(co_mat, na.rm = TRUE)
          co_w[co_w == 0] <- NA_real_
          co_gt  <- setNames(co_w / 1000, YEARS)
-         slope  <- setNames(c(NA_real_, -diff(co_gt)), YEARS)
-         v <- sapply(dec_end, function(y) {
-           w <- slope[as.character((y - 9):y)]
-           if (all(is.na(w))) NA_real_ else max(w, na.rm = TRUE)
-         })
+         # Mean annual decline across the decade, not its steepest single year.
+         # The 2.23 Gt reference was one year followed immediately by rebound,
+         # so a decade sustained at that rate is the harder comparison.
+         v <- (at(co_gt, dec_end - 10) - at(co_gt, dec_end)) / 10
          list(value = v, level = lvl(v, COVID_DECLINE, COVID_DECLINE))
        })
 )
@@ -592,6 +592,27 @@ cell_sm6 <- long_sm6 %>%
   }) %>%
   ungroup()
 
+# ── printed so the text can quote exact values ─────────────────
+message("\nPlotted worst-decade values (what the markers show):")
+for (ii in SELECTED_INDICATORS) {
+  message("\n--- indicator ", ii, " ---")
+  print(as.data.frame(
+    cell_sm6 %>% filter(id == ii) %>%
+      mutate(model = short_name(model),
+             scenario = unname(scen_labels[scenario])) %>%
+      select(model, scenario, value, level, decade = peak_decade, tag) %>%
+      tidyr::pivot_wider(names_from = scenario,
+                         values_from = c(value, level, decade, tag))
+  ), digits = 3)
+}
+message("\nCross-model median of plotted values, by indicator and scenario:")
+print(as.data.frame(
+  cell_sm6 %>% filter(!is.na(value)) %>%
+    mutate(scenario = unname(scen_labels[scenario])) %>%
+    group_by(id, scenario) %>%
+    summarise(median = median(value), n_high = sum(level >= 2L), n = n(),
+              .groups = "drop")), digits = 3)
+
 
 # ══════════════════════════════════════════════════════════════
 # 5. BUILD DOT PLOT
@@ -630,6 +651,13 @@ dot_df <- cell_sm6 %>%
       level == 2L  ~ "#E8595A",
       level == 1L  ~ "#F4D03F",
       TRUE         ~ "#5BB85C"
+    ),
+    # TEMP: colour by cluster (T / D / F tag), not by feasibility level
+    cluster_col = case_when(
+      tag == "T" ~ "#5A9B5A",   # Transition Leaders
+      tag == "D" ~ "#7B9CC8",   # Diversifying Economies
+      tag == "F" ~ "#F4874B",   # Fossil-Dependent
+      TRUE       ~ "grey70"
     ),
     val_num   = case_when(
       is.na(value)      ~ NA_character_,
@@ -690,8 +718,9 @@ ind_y_lims <- cell_sm6 %>%
          lo_mult = if_else(id %in% CP_IDS, EXPAND_LO_CP, EXPAND_LO),
          ylo     = ylo - lo_mult * rng,
          yhi     = yhi + EXPAND_HI * rng,
-         # carbon price growth is a ratio: that axis does not go below zero
-         ylo     = if_else(id %in% CP_IDS, pmax(ylo, 0), ylo),
+         # carbon price growth is a ratio: keep near zero but allow small negative
+         # space so the H: 5 label is not clipped at the panel bottom
+         ylo     = if_else(id %in% CP_IDS, pmax(ylo, -CP_Y_MAX * 0.07), ylo),
          yhi     = if_else(id %in% CP_IDS, CP_Y_MAX, yhi)) %>%
   select(id, strip_label, ylo, yhi)
 
@@ -741,44 +770,62 @@ build_fig <- function(scens, out_png, height, n_row = 1, fs = 1) {
                                 levels = levels(dd$model_short)))
   if (!one) bl <- crossing(bl, scenario_label = levels(dd$scenario_label))
 
+  # Cross-model median per indicator (and scenario for multi-panel figure)
+  if (one) {
+    med_df <- dd %>%
+      filter(!is.na(value), !off_scale) %>%
+      group_by(strip_label) %>%
+      summarise(med_val = median(value, na.rm = TRUE), .groups = "drop")
+  } else {
+    med_df <- dd %>%
+      filter(!is.na(value), !off_scale) %>%
+      group_by(strip_label, scenario_label) %>%
+      summarise(med_val = median(value, na.rm = TRUE), .groups = "drop")
+  }
+
+  # Split P1 threshold label: 2.23 Gt/yr goes in the horizontal centre
+  thr_lab_edge   <- thresh_high_df %>% filter(!grepl("Gt", thr_lab))
+  thr_lab_centre <- thresh_high_df %>% filter( grepl("Gt", thr_lab))
+  mid_lvl <- levels(dd$model_short)[ceiling(nlevels(dd$model_short) / 2)]
+
   p <- ggplot(dd, aes(x = model_short, y = y_plot)) +
     geom_blank(data = bl, aes(x = model_short, y = value), inherit.aes = FALSE) +
     geom_hline(data = thresh_med_df, aes(yintercept = thr_val),
-               linetype = "dashed", linewidth = 0.65, colour = "#C8A400",
+               linetype = "solid", linewidth = 0.65, colour = "#C8A400",
                inherit.aes = FALSE) +
     geom_text(data = thresh_med_df,
               aes(x = -Inf, y = thr_val, label = paste0("M: ", thr_val)),
-              hjust = -0.12, vjust = 1.5, size = 5.6 * fs,
+              hjust = -0.12, vjust = 1.5, size = 7.0 * fs,
               colour = "#8B6914", fontface = "italic", inherit.aes = FALSE) +
     geom_hline(data = thresh_high_df, aes(yintercept = thr_val),
-               linetype = "dotted", linewidth = 0.85, colour = "#C94040",
+               linetype = "solid", linewidth = 0.85, colour = "#C94040",
                inherit.aes = FALSE) +
-    geom_text(data = thresh_high_df,
-              aes(x = xp, y = thr_val, label = thr_lab,
-                  vjust = vj, hjust = hj),
-              size = 5.6 * fs,
+    geom_text(data = thr_lab_edge,
+              aes(x = xp, y = thr_val, label = thr_lab, vjust = vj, hjust = hj),
+              size = 7.0 * fs,
               colour = "#C94040", fontface = "italic", inherit.aes = FALSE) +
-    geom_point(aes(colour = fill_col, shape = model_short),
-               size = 5.0 * fs, stroke = 0.65, na.rm = TRUE) +
+    geom_text(data = thr_lab_centre,
+              aes(y = thr_val, label = thr_lab, vjust = vj),
+              x = mid_lvl, hjust = 0.5, size = 7.0 * fs,
+              colour = "#C94040", fontface = "italic", inherit.aes = FALSE) +
+    # Cross-model median line and label
+    geom_hline(data = med_df, aes(yintercept = med_val),
+               colour = "grey45", linewidth = 2.0, inherit.aes = FALSE) +
+    geom_text(data = med_df,
+              aes(x = Inf, y = med_val,
+                  label = formatC(med_val, format = "f", digits = 1)),
+              hjust = 1.1, vjust = 1.4, size = 6.5 * fs,
+              colour = "grey35", fontface = "bold", inherit.aes = FALSE) +
+    # TEMP: colour markers by cluster, not by feasibility level
+    geom_point(aes(colour = cluster_col, shape = model_short),
+               size = 8.0 * fs, stroke = 0.9, na.rm = TRUE) +
     # value above CP_Y_CAP: marker clamped, arrow pointing off the panel
     geom_segment(data = filter(dd, off_scale),
                  aes(x = model_short, xend = model_short,
-                     y = y_arr0, yend = y_arr1, colour = fill_col),
+                     y = y_arr0, yend = y_arr1, colour = cluster_col),
                  arrow = grid::arrow(length = unit(0.20, "cm"),
                                      type = "closed"),
                  linewidth = 0.9, inherit.aes = FALSE) +
-    # number right-aligned on the marker, cluster letter left-aligned just
-    # after it and in a smaller size
-    geom_text(data = filter(dd, !is.na(value)),
-              aes(label = val_label, colour = fill_col,
-                  vjust = if_else(off_scale, 1.8,
-                          if_else(level >= 1L, -0.7, 1.8))),
-              hjust = 1, size = 5.4 * fs, fontface = "bold") +
-    geom_text(data = filter(dd, !is.na(value), !is.na(tag_label)),
-              aes(label = tag_label, colour = fill_col,
-                  vjust = if_else(off_scale, 2.3,
-                          if_else(level >= 1L, -0.9, 2.3))),
-              hjust = 0, size = 4.0 * fs, fontface = "bold") +
     scale_colour_identity() +
     scale_shape_manual(values = shape_vec, guide = "none") +
     # GEM-E3 sits at the panel edge and its value label is right-aligned on the
@@ -787,12 +834,12 @@ build_fig <- function(scens, out_png, height, n_row = 1, fs = 1) {
                      expand = expansion(add = c(1.0, 0.75))) +
     scale_y_continuous(expand = expansion(mult = c(0, 0))) +
     labs(x = NULL, y = "Value (worst decade)") +
-    theme_bw(base_size = 18 * fs, base_family = "Arial") +
+    theme_bw(base_size = 22 * fs, base_family = "Arial") +
     theme(
-      axis.text.x        = element_text(size = 15 * fs, angle = 35, hjust = 1),
-      axis.text.y        = element_text(size = 15 * fs),
-      strip.text.x       = element_text(size = 15 * fs, face = "bold", lineheight = 1.15),
-      strip.text.y       = element_text(size = 17 * fs, face = "bold", angle = 0,
+      axis.text.x        = element_text(size = 17 * fs, angle = 35, hjust = 1),
+      axis.text.y        = element_text(size = 19 * fs),
+      strip.text.x       = element_text(size = 17 * fs, face = "bold", lineheight = 1.15),
+      strip.text.y       = element_text(size = 21 * fs, face = "bold", angle = 0,
                                         hjust = 0, lineheight = 1.1),
       strip.background   = element_blank(),
       panel.grid.minor   = element_blank(),
@@ -854,7 +901,7 @@ build_fig <- function(scens, out_png, height, n_row = 1, fs = 1) {
   message("Saved: ", out)
 }
 
-build_fig(FIG4_SCEN, "fig4_clusters.png", height = 6.0)
+build_fig(FIG4_SCEN, "fig4.png", height = 6.0)
 
-build_fig(SM9_SCENS, "fig_sm9_clusters.png",
+build_fig(SM9_SCENS, "fig_sm9.png",
           height = 4.2 * length(SM9_SCENS) + 1.4)
