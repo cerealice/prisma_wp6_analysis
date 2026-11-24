@@ -22,24 +22,26 @@ local({
                                bolditalic  = file.path(dirname(ttf), "arialbi.ttf"))
 })
 
+# Shared convention, matching fig_sm3.R / fig4_sm9.R and the mapping
+# circulated to partners.  Do not change without updating both.
 model_shapes <- c(
   # Full names
-  "GEM-E3 V2026"                          = 16,   # filled circle
-  "IMACLIM 2.0"                           = 17,   # filled triangle up
-  "IMAGE 3.4"                             = 15,   # filled square
+  "GEM-E3 V2026"                          = 15,   # filled square
+  "IMACLIM 2.0"                           = 16,   # filled circle
+  "IMAGE 3.4"                             = 17,   # filled triangle up
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12"    = 18,   # filled diamond
-  "OPEN-PROM 2.2"                         =  8,   # asterisk / star
+  "OPEN-PROM 2.2"                         =  4,   # cross
   "REMIND-MAgPIE 3.7-4.14"               =  1,   # open circle
-  "WITCH 6.0"                             =  2,   # open triangle up
-  "WITCH 6.0-EU28"                        =  0,   # open square
-  # Short names (same shapes — used when legends show abbreviations)
-  "GEM-E3"                                = 16,
-  "IMACLIM"                               = 17,
-  "IMAGE"                                 = 15,
+  "WITCH 6.0"                             =  0,   # open square
+  "WITCH 6.0-EU28"                        =  2,   # open triangle up
+  # Short names (same shapes, used when legends show abbreviations)
+  "GEM-E3"                                = 15,
+  "IMACLIM"                               = 16,
+  "IMAGE"                                 = 17,
   "MESSAGEix"                             = 18,
-  "OPEN-PROM"                             =  8,
+  "OPEN-PROM"                             =  4,
   "REMIND"                                =  1,
-  "WITCH"                                 =  2
+  "WITCH"                                 =  0
 )
 
 # Call this instead of using model_shapes directly.
@@ -53,7 +55,7 @@ resolve_model_shapes <- function(models_in_data) {
   if (length(unknown) > 0) {
     message("Models not in prisma_styles.R model_shapes (update dictionary): ",
             paste(unknown, collapse = ", "))
-    all_pch   <- c(16, 17, 15, 18, 8, 1, 2, 0, 5, 6, 3, 4, 7, 9, 10, 11)
+    all_pch   <- c(15, 16, 17, 18, 4, 1, 0, 2, 5, 6, 3, 8, 7, 9, 10, 11)
     spare_pch <- setdiff(all_pch, unname(known))
     extra     <- setNames(spare_pch[seq_along(unknown)], unknown)
     known     <- c(known, extra)
@@ -105,7 +107,7 @@ scenario_colors <- c(
 )
 
 scenario_labels <- c(
-  "SSP2 - Asymmetric Roll-Back" = "Uneven Retreat",
+  "SSP2 - Asymmetric Roll-Back" = "Shifted Ambition",
   "SSP2 - Late Reawakening"     = "Late Reawakening",
   "SSP2 - Meet Aspirations"     = "Meet Aspirations",
   "SSP2 - Staying Alive"        = "Tech Momentum"

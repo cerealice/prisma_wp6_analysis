@@ -239,11 +239,7 @@ dim_palette <- c(
 )
 
 # ── Python download wrapper ────────────────────────────────────
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 
 run_python_download <- function(variable, prefix, regions_vec = "World") {
   existing <- list.files(direct_dir, paste0("^", prefix, "_.*\\.parquet$"), full.names = TRUE)

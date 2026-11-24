@@ -117,11 +117,7 @@ theme_set(
 )
 
 # ── Download / load helpers ────────────────────────────────────
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 
 run_python_download <- function(variable, prefix, regions_vec = "World") {
   pat      <- paste0("^", prefix, "_\\d.*\\.parquet$")
@@ -258,6 +254,7 @@ endo_mods <- gdp_r10_all %>%
   pull(model) %>% as.character() %>% unique()
 
 use_models <- filter_latest_remind(sort(intersect(cands, endo_mods)))
+use_models <- use_models[use_models != "IMACLIM 2.0"]
 message("Models (cluster GDP + GSAT + endogenous): ", paste(use_models, collapse = ", "))
 
 gdp_r10_all <- gdp_r10_all %>% filter(model %in% use_models)

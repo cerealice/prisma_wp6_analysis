@@ -124,11 +124,7 @@ theme_set(
 )
 
 # ── Download / load helpers ────────────────────────────────────
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 
 run_python_download <- function(variable, prefix, regions_vec = "World") {
   pat      <- paste0("^", prefix, "_.*\\.parquet$")
@@ -332,6 +328,7 @@ use_models_cl <- filter_latest_remind(sort(intersect(cands_cl, endo_cl)))
 
 # Common model set
 use_models <- filter_latest_remind(sort(intersect(use_models_w, use_models_cl)))
+use_models <- use_models[use_models != "IMACLIM 2.0"]
 message("Models (world + cluster + GSAT + endogenous): ", paste(use_models, collapse = ", "))
 
 gdp_all     <- gdp_all     %>% filter(model %in% use_models)
@@ -781,11 +778,23 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
   # ── Panel (a): GDP timeseries with model-spread ribbon ───────
   ts_s <- ts_long %>% filter(scenario == target_ssp2)
 
+  # Interpolate each model to annual resolution before taking min/max.
+  # Without this, the ribbon connects 5-year-step maxima with straight lines,
+  # which can sit above individual model lines between reported years.
   ts_envelopes <- ts_s %>%
+    group_by(model_short, type) %>%
+    arrange(year) %>%
+    group_modify(~ tibble(
+      year = seq(min(.x$year), max(.x$year)),
+      pct  = approx(.x$year, .x$pct, xout = seq(min(.x$year), max(.x$year)),
+                    rule = 1)$y
+    )) %>%
+    ungroup() %>%
     group_by(year, type) %>%
     summarise(pct_min = min(pct, na.rm = TRUE),
               pct_max = max(pct, na.rm = TRUE),
-              .groups = "drop")
+              .groups = "drop") %>%
+    filter(!is.na(pct_min), !is.na(pct_max))
 
   message("\n== ", label, " : panel (a), peak and 2100 values by model (%) ==")
   print(as.data.frame(ts_s %>% group_by(model_short, type) %>%
@@ -888,12 +897,14 @@ make_figure <- function(target_ssp2, label, out_file, pb_ylim) {
                 T50_below0 = q90_v1_pct < 0, T67_below0 = q90_v3_pct < 0)
   ), digits = 3)
 
+  med_df_ok <- med_df %>% filter(!is.na(med_val))
+
   p_bc <- ggplot(pd_bc, aes(x = x_dot, y = q50, colour = model_short)) +
     geom_hline(yintercept = 0, linewidth = 0.9, linetype = "dashed", colour = "black") +
-    geom_hline(data = med_df, aes(yintercept = med_val),
+    geom_hline(data = med_df_ok, aes(yintercept = med_val),
                colour = "grey45", linewidth = 2.0, linetype = "solid",
                inherit.aes = FALSE) +
-    geom_text(data = med_df,
+    geom_text(data = med_df_ok,
               aes(x = Inf, y = med_val, label = sprintf("%+.1f%%", med_val)),
               hjust = 1.05, vjust = 1.4,
               colour = "grey25", size = 5.0, fontface = "bold",

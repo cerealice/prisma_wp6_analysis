@@ -85,18 +85,18 @@ theme_set(
 )
 
 # ── Python / parquet helpers ───────────────────────────────────
+SCI_TAG    <- "[SCI v2.2-alpha/MAGICC v7.6.0a3]"
 MAGICC_TAG <- "[MAGICC v7.6.0a3]"
-ca_vars <- c(
-  paste0("Climate Assessment|Surface Temperature (GSAT)|33rd Percentile ", MAGICC_TAG),
-  paste0("Climate Assessment|Surface Temperature (GSAT)|Median ",          MAGICC_TAG),
-  paste0("Climate Assessment|Surface Temperature (GSAT)|67th Percentile ", MAGICC_TAG)
+ca_base <- c(
+  "Climate Assessment|Surface Temperature (GSAT)|33rd Percentile",
+  "Climate Assessment|Surface Temperature (GSAT)|Median",
+  "Climate Assessment|Surface Temperature (GSAT)|67th Percentile"
 )
+# Download both label variants; SCI prevails when a model has both
+ca_vars <- c(paste0(ca_base, " ", SCI_TAG),
+             paste0(ca_base, " ", MAGICC_TAG))
 
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 
 run_python_download <- function(variable, prefix, regions_vec = "World") {
   pat      <- paste0("^", prefix, "_.*\\.parquet$")
@@ -191,13 +191,20 @@ gsat <- read_parquet(ca_files[which.max(file.info(ca_files)$mtime)]) %>%
   filter(grepl("Surface Temperature.*GSAT", variable, ignore.case = TRUE),
          region == "World", scenario %in% scenarios,
          year >= 2020, year <= 2100) %>%
-  mutate(pct_col = case_when(
-    grepl("33rd",        variable, ignore.case = TRUE) ~ "p33",
-    grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
-    grepl("67th",        variable, ignore.case = TRUE) ~ "p67",
-    TRUE ~ NA_character_
-  )) %>%
+  mutate(
+    pct_col = case_when(
+      grepl("33rd",        variable, ignore.case = TRUE) ~ "p33",
+      grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
+      grepl("67th",        variable, ignore.case = TRUE) ~ "p67",
+      TRUE ~ NA_character_
+    ),
+    is_sci = grepl("SCI", variable, fixed = TRUE)
+  ) %>%
   filter(!is.na(pct_col)) %>%
+  # SCI prevails: drop MAGICC rows for any model that also has SCI rows
+  group_by(model) %>%
+  filter(is_sci | !any(is_sci)) %>%
+  ungroup() %>%
   select(model, scenario, year, pct_col, value) %>%
   pivot_wider(names_from = pct_col, values_from = value) %>%
   filter(!is.na(p50))
@@ -267,6 +274,17 @@ end_p67 <- gsat %>%
   transmute(model, scenario, temp_val = p67,
             time_type = "Temperature at 2100")
 
+mod_short <- c(
+  "GEM-E3 V2026"                       = "GEM-E3",
+  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMAGE 3.4"                          = "IMAGE",
+  "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
+  "OPEN-PROM 2.2"                      = "OPEN-PROM",
+  "REMIND-MAgPIE 3.6-4.14"            = "REMIND 3.6",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND 3.7",
+  "WITCH 6.0"                          = "WITCH"
+)
+
 box_data <- bind_rows(peak_p67, end_p67) %>%
   mutate(
     scen_label = factor(
@@ -274,9 +292,15 @@ box_data <- bind_rows(peak_p67, end_p67) %>%
       levels = scen_lbl_levels
     ),
     time_type = factor(time_type,
-                       levels = c("Peak temperature", "Temperature at 2100"))
+                       levels = c("Peak temperature", "Temperature at 2100")),
+    model_lbl = factor(
+      ifelse(model %in% names(mod_short), mod_short[model], as.character(model))
+    )
   ) %>%
   filter(!is.na(temp_val))
+
+mod_lvls   <- sort(unique(as.character(box_data$model_lbl)))
+mod_shapes <- resolve_model_shapes(mod_lvls)
 
 # Median per scenario × timing — for median line and value labels
 med_box <- box_data %>%
@@ -320,6 +344,7 @@ p_b <- ggplot(box_data,
               aes(x      = scen_label,
                   y      = temp_val,
                   colour = time_type,
+                  shape  = model_lbl,
                   group  = interaction(scen_label, time_type))) +
   geom_hline(yintercept = 2.0, linewidth = 0.6, linetype = "dotted", colour = "black") +
   annotate("text", x = Inf, y = 2.0, label = "2.0\u00b0C",
@@ -335,15 +360,15 @@ p_b <- ggplot(box_data,
   # Individual model p67 points
   geom_point(
     position = position_jitterdodge(dodge.width = 0.65,
-                                    jitter.width = 0.10,
+                                    jitter.width = 0.08,
                                     seed = 42),
-    size = 2.5, shape = 16, alpha = 0.85
+    size = 3.5, alpha = 0.90
   ) +
   # Median value label above median line
   geom_text(
     data        = med_box,
     aes(x = scen_label, y = med,
-        label  = sprintf("%.2f\u00b0C", med),
+        label  = sprintf("%.2f", med),
         group  = time_type),
     position    = position_dodge(width = 0.65),
     vjust       = -0.8, size = 5.0, fontface = "bold",
@@ -355,12 +380,16 @@ p_b <- ggplot(box_data,
                "Temperature at 2100" = "#A0306A"),
     name   = NULL
   ) +
+  scale_shape_manual(values = mod_shapes, name = NULL) +
   scale_x_discrete(labels = scen_labels_wrap) +
   scale_y_continuous(limits = c(1.3, NA),
                      expand = expansion(mult = c(0.02, 0.10))) +
   labs(title = "(b) Global surface temperature (67th percentile)",
        x = NULL, y = "\u00b0C above 1850\u20131900") +
-  guides(colour = guide_legend(ncol = 2, override.aes = list(size = 4))) +
+  guides(
+    colour = guide_legend(ncol = 1, override.aes = list(size = 4)),
+    shape  = guide_legend(ncol = 2, override.aes = list(size = 4))
+  ) +
   theme(legend.position    = "bottom",
         panel.grid.major.x = element_blank(),
         axis.text.x        = element_text(size = 11, colour = x_label_colours, face = "bold"))
@@ -373,7 +402,7 @@ p_b <- ggplot(box_data,
 fig <- (p_a | p_b)
 
 out_file <- file.path(graphs_dir, "fig2.png")
-ggsave(out_file, fig, width = 14, height = 6.5, dpi = 300)
+ggsave(out_file, fig, width = 14, height = 7.5, dpi = 300)
 message("Saved: ", out_file)
 
 # ── Update figure captions Word document ──────────────────────

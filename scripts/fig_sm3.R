@@ -80,19 +80,19 @@ theme_set(
 )
 
 # ── MAGICC variables ───────────────────────────────────────────
+SCI_TAG    <- "[SCI v2.2-alpha/MAGICC v7.6.0a3]"
 MAGICC_TAG <- "[MAGICC v7.6.0a3]"
-ca_vars <- c(
-  paste0("Climate Assessment|Surface Temperature (GSAT)|33rd Percentile ", MAGICC_TAG),
-  paste0("Climate Assessment|Surface Temperature (GSAT)|Median ",          MAGICC_TAG),
-  paste0("Climate Assessment|Surface Temperature (GSAT)|67th Percentile ", MAGICC_TAG)
+ca_base <- c(
+  "Climate Assessment|Surface Temperature (GSAT)|33rd Percentile",
+  "Climate Assessment|Surface Temperature (GSAT)|Median",
+  "Climate Assessment|Surface Temperature (GSAT)|67th Percentile"
 )
+# Download both label variants; SCI prevails when a model has both
+ca_vars <- c(paste0(ca_base, " ", SCI_TAG),
+             paste0(ca_base, " ", MAGICC_TAG))
 
 # ── Python / parquet helpers ───────────────────────────────────
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 
 run_python_download <- function(variable, prefix, regions_vec = "World") {
   pat      <- paste0("^", prefix, "_\\d.*\\.parquet$")
@@ -215,13 +215,20 @@ gsat <- raw_gsat %>%
   filter(grepl("Surface Temperature.*GSAT", variable, ignore.case = TRUE),
          region == "World", scenario %in% scenarios,
          year >= 2020, year <= 2100) %>%
-  mutate(pct_col = case_when(
-    grepl("33rd",        variable, ignore.case = TRUE) ~ "p33",
-    grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
-    grepl("67th",        variable, ignore.case = TRUE) ~ "p67",
-    TRUE ~ NA_character_
-  )) %>%
+  mutate(
+    pct_col = case_when(
+      grepl("33rd",        variable, ignore.case = TRUE) ~ "p33",
+      grepl("Median|50th", variable, ignore.case = TRUE) ~ "p50",
+      grepl("67th",        variable, ignore.case = TRUE) ~ "p67",
+      TRUE ~ NA_character_
+    ),
+    is_sci = grepl("SCI", variable, fixed = TRUE)
+  ) %>%
   filter(!is.na(pct_col)) %>%
+  # SCI prevails: drop MAGICC rows for any model that also has SCI rows
+  group_by(model) %>%
+  filter(is_sci | !any(is_sci)) %>%
+  ungroup() %>%
   select(model, scenario, year, pct_col, value) %>%
   pivot_wider(names_from = pct_col, values_from = value) %>%
   filter(!is.na(p50), !is.na(p67))

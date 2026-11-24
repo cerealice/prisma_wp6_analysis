@@ -30,6 +30,8 @@ xl_path     <- file.path(data_dir, "carbon_price_weighted_r10.xlsx")
 dir.create(outdir,   recursive = TRUE, showWarnings = FALSE)
 dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
 
+source(file.path(scripts_dir, "model_fixes.R"))
+
 # ── Scenarios ─────────────────────────────────────────────────────────────────
 scenarios <- c(
   "SSP2 - Late Reawakening",
@@ -39,11 +41,7 @@ scenarios <- c(
 )
 
 # ── Python executable ─────────────────────────────────────────────────────────
-miniconda_envs        <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
-env_dirs              <- list.dirs(miniconda_envs, recursive = FALSE)
-python_exe_candidates <- Filter(file.exists, file.path(env_dirs, "python.exe"))
-if (length(python_exe_candidates) == 0) stop("No python.exe found under ", miniconda_envs)
-python_exe <- python_exe_candidates[1]
+python_exe <- find_python_pyam()
 message("Using Python: ", python_exe)
 
 # ── Download helper: NO region filter → all native model regions ───────────────

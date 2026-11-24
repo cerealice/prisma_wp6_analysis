@@ -30,6 +30,31 @@ filter_latest_remind <- function(models) {
   models
 }
 
+# ── Python environment detection ──────────────────────────────────────────────
+#
+# Returns the path to the first python.exe in USERPROFILE/miniconda3/envs that
+# has pyam installed.  Avoids picking pypsa-earth (alphabetically first but no
+# pyam) over pypsa-eur.
+find_python_pyam <- function() {
+  miniconda_envs <- file.path(Sys.getenv("USERPROFILE"), "miniconda3", "envs")
+  env_dirs       <- list.dirs(miniconda_envs, recursive = FALSE)
+  candidates     <- Filter(file.exists, file.path(env_dirs, "python.exe"))
+  if (length(candidates) == 0)
+    stop("No python.exe found under ", miniconda_envs)
+  # Write to a temp file to avoid Windows shell quoting issues with -c "import pyam"
+  tmp_test <- tempfile(fileext = ".py")
+  writeLines("import pyam", tmp_test)
+  on.exit(unlink(tmp_test), add = TRUE)
+  for (py in candidates) {
+    if (system2(py, args = tmp_test,
+                stdout = FALSE, stderr = FALSE) == 0L)
+      return(py)
+  }
+  stop("No conda environment with pyam found. ",
+       "Install pyam (e.g. pip install pyam-iamc) in one of: ",
+       paste(basename(env_dirs), collapse = ", "))
+}
+
 # ── Sparse-model band masking ──────────────────────────────────────────────────
 #
 # Some models report only at 10-year intervals after 2050.  After linear
