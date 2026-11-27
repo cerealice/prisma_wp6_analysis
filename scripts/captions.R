@@ -57,7 +57,7 @@ CAPTIONS <- list(
       "Boxes show interquartile range and the horizontal line gives the cross-model median; ",
       "whiskers extend to the most extreme of the model values; points show individual models. ",
       "The dotted line marks 2.0\u00b0C above pre-industrial levels. ",
-      "All climate diagnostics computed with MAGICC v7.6.0a3."
+      "All climate diagnostics computed with SCI v2.2-alpha/MAGICC v7.6.0a3."
     )
   ),
 
@@ -147,7 +147,7 @@ CAPTIONS <- list(
       "(CO2-only): 400, 500, 1150, 1350 GtCO2. ",
       "(d) Effective Radiative Forcing, 2020-2100. ",
       "Lines show the cross-model median; ribbons span model minimum to maximum. ",
-      "All temperature and climate diagnostics computed with MAGICC v7.6.0a3."
+      "All temperature and climate diagnostics computed with SCI v2.2-alpha/MAGICC v7.6.0a3."
     )
   ),
 
@@ -251,7 +251,7 @@ CAPTIONS <- list(
       "Supplementary diagnostic | All Climate Assessment variables for ",
       "SSP2 - Staying Alive. ",
       "Each panel shows one Climate Assessment output variable reported by PRISMA models ",
-      "(MAGICC v7.6.0a3). Lines are coloured by model; ",
+      "(SCI v2.2-alpha/MAGICC v7.6.0a3). Lines are coloured by model; ",
       "GEM-E3 V2026 is highlighted with a bold red line. ",
       "y-axes are free across panels (units differ per variable). ",
       "Produced to diagnose anomalous GEM-E3 temperature behaviour."

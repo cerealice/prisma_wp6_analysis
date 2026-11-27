@@ -179,7 +179,7 @@ short_region <- function(r) sub(" \\(R10\\)$", "", r)
 
 model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMACLIM 2.0"                        = "IMACLIM-R",
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
@@ -216,7 +216,7 @@ PC_REGIONS <- setdiff(r10_regions, PC_EXCLUDE)
 
 model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMACLIM 2.0"                        = "IMACLIM-R",
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
@@ -648,13 +648,15 @@ dot_df <- cell_sm6 %>%
       level == 1L  ~ "#F4D03F",
       TRUE         ~ "#5BB85C"
     ),
-    # TEMP: colour by cluster (T / D / F tag), not by feasibility level
+    # Cluster colours for all indicators except P1 (which is global, not cluster-level).
+    # P1 markers use traffic-light colours so they turn red above the 2.23 Gt threshold.
     cluster_col = case_when(
       tag == "T" ~ "#5A9B5A",   # Transition Leaders
       tag == "D" ~ "#7B9CC8",   # Diversifying Economies
       tag == "F" ~ "#F4874B",   # Fossil-Dependent
       TRUE       ~ "grey70"
     ),
+    plot_col = if_else(id == "P1", fill_col, cluster_col),
     val_num   = case_when(
       is.na(value)      ~ NA_character_,
       abs(value) >= 1e3 ~ paste0(round(value / 1000, 1), "k"),
@@ -812,13 +814,13 @@ build_fig <- function(scens, out_png, height, n_row = 1, fs = 1) {
                   label = formatC(med_val, format = "f", digits = 1)),
               hjust = 1.1, vjust = 1.4, size = 6.5 * fs,
               colour = "grey35", fontface = "bold", inherit.aes = FALSE) +
-    # TEMP: colour markers by cluster, not by feasibility level
-    geom_point(aes(colour = cluster_col, shape = model_short),
+    # Cluster colours for all panels; P1 uses traffic-light (red above 2.23 Gt)
+    geom_point(aes(colour = plot_col, shape = model_short),
                size = 8.0 * fs, stroke = 0.9, na.rm = TRUE) +
     # value above CP_Y_CAP: marker clamped, arrow pointing off the panel
     geom_segment(data = filter(dd, off_scale),
                  aes(x = model_short, xend = model_short,
-                     y = y_arr0, yend = y_arr1, colour = cluster_col),
+                     y = y_arr0, yend = y_arr1, colour = plot_col),
                  arrow = grid::arrow(length = unit(0.20, "cm"),
                                      type = "closed"),
                  linewidth = 0.9, inherit.aes = FALSE) +
@@ -897,7 +899,309 @@ build_fig <- function(scens, out_png, height, n_row = 1, fs = 1) {
   message("Saved: ", out)
 }
 
-build_fig(FIG4_SCEN, "fig4.png", height = 6.0)
+# ══════════════════════════════════════════════════════════════
+# OFFICIAL FIGURE STYLE
+# Zone backgrounds · cluster-coloured dots · box-whisker overlay
+# (build_fig above is kept for temp scripts that call it directly)
+# ══════════════════════════════════════════════════════════════
 
-build_fig(SM9_SCENS, "fig_sm9.png",
-          height = 4.2 * length(SM9_SCENS) + 1.4)
+# ── REMIND relabeling ──────────────────────────────────────────
+remind_relabel <- function(x) sub("^REMIND.*", "REMIND-\nMAgPIE", x)
+mod_order  <- remind_relabel(mod_order)
+shape_vec  <- setNames(shape_vec, remind_relabel(names(shape_vec)))
+dot_df     <- dot_df %>%
+  mutate(model_short = factor(remind_relabel(as.character(model_short)),
+                               levels = mod_order))
+
+# ── Strip label simplification ─────────────────────────────────
+old_to_new <- setNames(
+  paste0(ind_meta_dot$name, "\n(", ind_meta_dot$unit, ")"),
+  as.character(ind_meta_dot$strip_label)
+)
+old_to_new <- sub("Per-capita CO\u2082 decline",
+                  "Per-capita CO\u2082\ndecline", old_to_new, fixed = TRUE)
+relabel_strip <- function(x) {
+  factor(unname(old_to_new[as.character(x)]),
+         levels = unique(unname(old_to_new)))
+}
+ind_meta_dot   <- ind_meta_dot %>% mutate(strip_label = relabel_strip(strip_label))
+dot_df         <- dot_df       %>% mutate(strip_label = relabel_strip(strip_label))
+thresh_high_df <- ind_meta_dot %>%
+  mutate(cp_panel = id %in% CP_IDS,
+         vj = if_else(cp_panel,  1.5, -0.5),
+         hj = if_else(cp_panel,  1.12, -0.12),
+         xp = if_else(cp_panel,  Inf,  -Inf)) %>%
+  select(strip_label, thr_val = high, thr_lab, vj, hj, xp)
+thresh_med_df  <- ind_meta_dot %>%
+  filter(med != high) %>%
+  select(strip_label, thr_val = med)
+ind_y_lims     <- ind_y_lims   %>% mutate(strip_label = relabel_strip(strip_label))
+
+# ── Per-cluster recomputation ──────────────────────────────────
+compute_all_clusters <- function(id_str, m, s) {
+  rows <- lapply(ALL_CLUSTERS, function(cl) {
+    code <- CL_CODE[[cl]]
+    r <- tryCatch(switch(id_str,
+      "2.1" = {
+        if (is.null(cp_raw) || is.null(reg_raw)) return(na_res())
+        p     <- cl_price(m, s, cl)
+        pd    <- at(p, dec_end); pprev <- at(p, dec_end - 10)
+        ratio <- ifelse(is.na(pprev) | is.na(pd), NA_real_,
+                        pd / pmax(pprev, CP_FLOOR))
+        list(value = ratio, level = lvl(ratio, CP_RATIO, CP_RATIO))
+      },
+      "3.1" = {
+        if (is.null(elec_raw)) return(na_res())
+        v <- dec_delta(cl_share(elec_raw, m, s,
+                                "Secondary Energy|Electricity|Wind",
+                                "Secondary Energy|Electricity", cl))
+        list(value = v, level = lvl(v, 10, 20))
+      },
+      "3.2" = {
+        if (is.null(elec_raw)) return(na_res())
+        v <- dec_delta(cl_share(elec_raw, m, s,
+                                "Secondary Energy|Electricity|Solar",
+                                "Secondary Energy|Electricity", cl))
+        list(value = v, level = lvl(v, 10, 20))
+      },
+      "4.1" = {
+        if (is.null(fe_raw)) return(na_res())
+        v <- -dec_pct_chg(cl_sum(fe_raw, m, s, "Final Energy", cl))
+        list(value = v, level = lvl(v, 10, 20))
+      },
+      "5.1b" = {
+        if (is.null(reg_raw)) return(na_res())
+        co     <- cl_sum(reg_raw, m, s, "Emissions|CO2", cl)
+        po     <- cl_sum(reg_raw, m, s, "Population",    cl)
+        po[!is.na(po) & po == 0] <- NA_real_
+        pc     <- setNames(co / po, YEARS)
+        pc_srt <- at(pc, dec_end - 10); pc_end <- at(pc, dec_end)
+        x      <- 100 * (pc_srt - pc_end) / pc_srt
+        x[is.na(pc_srt) | is.na(pc_end) | pc_srt <= 0 | pc_end < 0] <- NA_real_
+        list(value = x, level = lvl(x, PC_RATE, PC_RATE))
+      },
+      na_res()
+    ), error = function(e) { warning(e); na_res() })
+    if (all(is.na(r$value)))
+      return(tibble(tag = code, value = NA_real_, level = NA_integer_,
+                    peak_decade = NA_integer_))
+    lmax <- max(r$level, na.rm = TRUE)
+    cand <- which(r$level == lmax & !is.na(r$value))
+    j    <- cand[which.max(r$value[cand])]
+    tibble(tag = code, value = r$value[j], level = lmax, peak_decade = dec_end[j])
+  })
+  bind_rows(rows) %>% mutate(model = m, scenario = s, id = id_str)
+}
+
+cluster_ids <- setdiff(SELECTED_INDICATORS, "P1")
+all_rows_cl <- list()
+for (id_str in cluster_ids)
+  for (s in plot_scens)
+    for (m in mods_all)
+      all_rows_cl[[length(all_rows_cl) + 1]] <- compute_all_clusters(id_str, m, s)
+
+p1_data <- cell_sm6 %>%
+  filter(id == "P1") %>%
+  mutate(tag = "W") %>%
+  select(model, scenario, id, tag, value, level, peak_decade)
+
+cell_per_cluster <- bind_rows(bind_rows(all_rows_cl), p1_data)
+
+ind_y_lims_fig4 <- cell_per_cluster %>%
+  filter(!is.na(value)) %>%
+  filter(!(id %in% CP_IDS & value > CP_Y_CAP)) %>%
+  group_by(id) %>%
+  summarise(ylo = min(value), yhi = max(value), .groups = "drop") %>%
+  left_join(ind_meta_dot %>% select(id, strip_label, med, high), by = "id") %>%
+  mutate(ylo = pmin(ylo, med, high, na.rm = TRUE),
+         yhi = pmax(yhi, med, high, na.rm = TRUE),
+         rng     = pmax(yhi - ylo, 1e-9),
+         lo_mult = if_else(id %in% CP_IDS, EXPAND_LO_CP, EXPAND_LO),
+         ylo     = ylo - lo_mult * rng,
+         yhi     = yhi + EXPAND_HI * rng,
+         ylo     = if_else(id %in% CP_IDS, pmax(ylo, -CP_Y_MAX * 0.07), ylo),
+         yhi     = if_else(id %in% CP_IDS, CP_Y_MAX, yhi)) %>%
+  select(id, strip_label, ylo, yhi)
+
+CL_COLS  <- c("T" = "#5A9B5A", "D" = "#7B9CC8", "F" = "#F4874B", "W" = "grey15")
+CL_NAMES <- c("T" = "Transition Leaders", "D" = "Diversifying Economies",
+               "F" = "Fossil-Dependent\nEconomies", "W" = "Global")
+
+dot_df_fig4 <- cell_per_cluster %>%
+  left_join(ind_meta_dot, by = "id") %>%
+  mutate(
+    scenario_label = factor(scen_labels[scenario], levels = scen_lbl_levels),
+    model_short    = factor(remind_relabel(short_name(model)), levels = mod_order),
+    cluster_name   = factor(CL_NAMES[tag], levels = CL_NAMES),
+    dot_col        = CL_COLS[tag]
+  ) %>%
+  left_join(ind_y_lims_fig4 %>% select(id, p_lo = ylo, p_hi = yhi), by = "id") %>%
+  mutate(
+    off_scale = id %in% CP_IDS & !is.na(value) & value > CP_Y_CAP,
+    p_rng     = p_hi - p_lo,
+    y_plot    = if_else(off_scale, p_lo + 0.86 * p_rng, value),
+    y_arr0    = y_plot + 0.03 * p_rng,
+    y_arr1    = y_plot + 0.11 * p_rng
+  )
+
+fmt2 <- function(x) {
+  s <- signif(x, 2)
+  ifelse(is.na(s), NA_character_,
+         ifelse(s == floor(s), formatC(s, format = "d"), as.character(s)))
+}
+
+build_fig4 <- function(scens, scen_lbl, zone_fills, out_png, height = 8.0) {
+
+  lbl_levels <- unname(scen_lbl[scens])
+
+  plot_df <- dot_df_fig4 %>%
+    filter(scenario %in% scens) %>%
+    mutate(scenario_label = factor(unname(scen_lbl[scenario]), levels = lbl_levels))
+
+  box_df <- plot_df %>% filter(!is.na(value), !off_scale)
+
+  med_df <- box_df %>%
+    group_by(strip_label, scenario_label) %>%
+    summarise(med_val = median(value, na.rm = TRUE), .groups = "drop")
+
+  ylims_c <- ind_y_lims_fig4 %>%
+    left_join(ind_meta_dot %>% select(id, strip_label, med, high),
+              by = c("id", "strip_label")) %>%
+    mutate(half  = pmax(abs(yhi - high), abs(high - ylo)),
+           ylo_c = high - half,
+           yhi_c = high + half)
+
+  blank_df <- ylims_c %>%
+    select(strip_label, ylo_c, yhi_c) %>%
+    pivot_longer(c(ylo_c, yhi_c), names_to = ".drop", values_to = "value") %>%
+    select(strip_label, value) %>%
+    crossing(scenario_label = factor(lbl_levels, levels = lbl_levels))
+
+  zone_df <- bind_rows(
+    ylims_c %>% transmute(strip_label, zone = "low",    ymin = ylo_c, ymax = pmin(med, high)),
+    ylims_c %>% filter(med < high) %>%
+                transmute(strip_label, zone = "medium", ymin = med,   ymax = high),
+    ylims_c %>% transmute(strip_label, zone = "high",   ymin = high,  ymax = yhi_c)
+  )
+
+  present_cl <- unique(as.character(plot_df$cluster_name[!is.na(plot_df$cluster_name)]))
+  cl_col_map <- setNames(CL_COLS[names(CL_NAMES)], CL_NAMES)[present_cl]
+
+  set.seed(42)
+
+  p <- ggplot(plot_df, aes(x = scenario_label, y = y_plot)) +
+    geom_rect(data = zone_df,
+              aes(xmin = -Inf, xmax = Inf, ymin = ymin, ymax = ymax, fill = zone),
+              inherit.aes = FALSE) +
+    scale_fill_manual(values = zone_fills, guide = "none") +
+    geom_blank(data = blank_df,
+               aes(x = scenario_label, y = value), inherit.aes = FALSE) +
+    geom_hline(data = thresh_med_df, aes(yintercept = thr_val),
+               linetype = "dashed", linewidth = 0.5, colour = "grey50",
+               inherit.aes = FALSE) +
+    geom_hline(data = thresh_high_df, aes(yintercept = thr_val),
+               linetype = "dashed", linewidth = 0.5, colour = "grey30",
+               inherit.aes = FALSE) +
+    geom_point(aes(colour = cluster_name, shape = model_short),
+               position = position_jitter(width = 0.12, seed = 42),
+               size = 3.5, stroke = 0.6, alpha = 0.90, na.rm = TRUE) +
+    scale_colour_manual(values = cl_col_map, name = NULL,
+                        guide = guide_legend(order = 1, ncol = 2,
+                                             override.aes = list(size = 4, alpha = 1,
+                                                                  shape = 16))) +
+    geom_boxplot(data = box_df,
+                 aes(x = scenario_label, y = value),
+                 width = 0.45, linewidth = 0.65,
+                 fill = NA, colour = "black",
+                 outlier.shape = NA, inherit.aes = FALSE) +
+    geom_text(data = med_df,
+              aes(x = scenario_label, y = med_val, label = fmt2(med_val)),
+              hjust = 0, vjust = 0.5, nudge_x = 0.28,
+              size = 5.5, fontface = "bold", colour = "black",
+              inherit.aes = FALSE) +
+    scale_shape_manual(values = shape_vec, name = NULL,
+                       guide = guide_legend(order = 2, ncol = 4, byrow = TRUE,
+                                            theme = theme(legend.key.width = unit(1.8, "cm")))) +
+    scale_y_continuous(expand = expansion(mult = c(0, 0))) +
+    facet_wrap(~ strip_label, nrow = 1, scales = "free_y") +
+    labs(x = NULL, y = "Value (worst decade)") +
+    theme_bw(base_size = 18, base_family = "Arial") +
+    theme(
+      axis.text.x        = element_text(size = 13, angle = 35, hjust = 1),
+      axis.text.y        = element_text(size = 14),
+      strip.text.x       = element_text(size = 13, face = "bold", lineheight = 1.15),
+      strip.background   = element_blank(),
+      panel.background   = element_blank(),
+      panel.grid.minor   = element_blank(),
+      panel.grid.major.x = element_blank(),
+      panel.spacing.x    = unit(SPACING_X, "lines"),
+      legend.position    = "bottom",
+      legend.box         = "horizontal",
+      legend.text        = element_text(size = 12)
+    )
+
+  panel_order <- levels(droplevels(plot_df$strip_label))
+  y_scales <- lapply(panel_order, function(sl) {
+    meta <- ylims_c %>% filter(as.character(strip_label) == sl)
+    if (nrow(meta) == 0)
+      return(scale_y_continuous(expand = expansion(mult = c(0, 0))))
+    std  <- pretty(c(meta$ylo_c, meta$yhi_c), n = 5)
+    brks <- sort(unique(c(std, meta$med, meta$high)))
+    brks <- brks[brks >= meta$ylo_c & brks <= meta$yhi_c]
+    scale_y_continuous(breaks = brks, labels = fmt2,
+                       expand = expansion(mult = c(0, 0)))
+  })
+  p <- p + facetted_pos_scales(y = y_scales)
+
+  g <- ggplotGrob(p)
+
+  sd  <- ind_meta_dot$dim[match(levels(plot_df$strip_label),
+                                 as.character(ind_meta_dot$strip_label))]
+  sf  <- dim_palette[sd]
+  idx <- grep("strip-t", g$layout$name)
+  for (i in seq_along(idx)) {
+    fc <- sf[i]; if (is.na(fc)) next
+    pg <- g$grobs[[idx[i]]]
+    ri <- grep("rect", names(pg$grobs[[1]]$children))
+    if (length(ri) > 0) pg$grobs[[1]]$children[[ri]]$gp$fill <- fc
+    g$grobs[[idx[i]]] <- pg
+  }
+
+  pan <- g$layout[grepl("^panel", g$layout$name), ]
+  if (nrow(pan) >= 2) {
+    cols    <- sort(unique(pan$l))
+    gap_col <- cols[length(cols)] - 1
+    g$widths[gap_col] <- unit(3.5, "lines")
+    st <- g$layout$t[grepl("^strip-t", g$layout$name)]
+    g  <- gtable::gtable_add_grob(
+      g,
+      grid::linesGrob(x = unit(c(0.3, 0.3), "npc"), y = unit(c(0, 1), "npc"),
+                      gp = grid::gpar(col = "grey35", lwd = 1.8)),
+      t = if (length(st)) min(st) else min(pan$t), b = max(pan$b),
+      l = gap_col, r = gap_col, z = Inf, clip = "off", name = "pace-divider")
+    cols_all <- sort(unique(pan$l))
+    g$widths[cols_all[1]]   <- g$widths[cols_all[1]]   * CP_WIDEN
+    g$widths[max(cols_all)] <- g$widths[max(cols_all)] * P1_WIDEN
+  }
+
+  ggsave(file.path(graphs_dir, out_png), g, width = 17, height = height, dpi = 300)
+  message("Saved: ", out_png)
+}
+
+ZONE_FILLS <- c("low" = "white", "medium" = "#E8E8E8", "high" = "#C4C4C4")
+
+build_fig4(
+  scens      = c("SSP2 - Meet Aspirations", "SSP2 - Late Reawakening"),
+  scen_lbl   = c("SSP2 - Meet Aspirations" = "Meet\nAspirations",
+                  "SSP2 - Late Reawakening" = "Late\nReawakening"),
+  zone_fills = ZONE_FILLS,
+  out_png    = "fig4.png"
+)
+
+build_fig4(
+  scens      = c("SSP2 - Asymmetric Roll-Back", "SSP2 - Staying Alive"),
+  scen_lbl   = c("SSP2 - Asymmetric Roll-Back" = "Shifted\nAmbition",
+                  "SSP2 - Staying Alive"        = "Tech\nMomentum"),
+  zone_fills = ZONE_FILLS,
+  out_png    = "fig_sm9.png"
+)

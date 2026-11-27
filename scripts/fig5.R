@@ -101,12 +101,12 @@ plot_years <- c(2030L, 2050L)
 # ── Model short names ──────────────────────────────────────────
 model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMACLIM 2.0"                        = "IMACLIM-R",
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
-  "REMIND-MAgPIE 3.6-4.14"            = "REMIND",
-  "REMIND-MAgPIE 3.7-4.14"            = "REMIND",
+  "REMIND-MAgPIE 3.6-4.14"            = "REMIND-\nMAgPIE",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND-\nMAgPIE",
   "WITCH 6.0"                          = "WITCH"
 )
 short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_names[x], x)
@@ -399,14 +399,14 @@ make_panel <- function(summary_df, dots_df, labels_df, title_str, y_label) {
               position    = position_dodge(width = 0.7),
               vjust = -0.4, hjust = -0.1, size = 4.5, fontface = "bold",
               colour = "grey20", inherit.aes = FALSE) +
-    scale_fill_manual(values = scenario_colors, labels = scenario_labels, name = "Scenario") +
-    scale_shape_manual(values = model_shapes, name = "Model") +
+    scale_fill_manual(values = scenario_colors, labels = scenario_labels, name = NULL) +
+    scale_shape_manual(values = model_shapes, name = NULL) +
     facet_wrap2(~ cluster, nrow = 1,
                 strip = strip_themed(text_x = cl_strip_fills)) +
     labs(title = title_str, x = NULL, y = y_label) +
     guides(
       fill  = guide_legend(order = 1, ncol = 1),
-      shape = guide_legend(order = 2, ncol = ceiling(length(model_shapes) / 4), byrow = TRUE)
+      shape = guide_legend(order = 2, ncol = 4, byrow = TRUE)
     )
 }
 

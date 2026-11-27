@@ -276,12 +276,12 @@ end_p67 <- gsat %>%
 
 mod_short <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMACLIM 2.0"                        = "IMACLIM-R",
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
-  "REMIND-MAgPIE 3.6-4.14"            = "REMIND 3.6",
-  "REMIND-MAgPIE 3.7-4.14"            = "REMIND 3.7",
+  "REMIND-MAgPIE 3.6-4.14"            = "REMIND-\nMAgPIE",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND-\nMAgPIE",
   "WITCH 6.0"                          = "WITCH"
 )
 

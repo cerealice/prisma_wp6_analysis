@@ -36,7 +36,7 @@ model_shapes <- c(
   "WITCH 6.0-EU28"                        =  2,   # open triangle up
   # Short names (same shapes, used when legends show abbreviations)
   "GEM-E3"                                = 15,
-  "IMACLIM"                               = 16,
+  "IMACLIM-R"                             = 16,
   "IMAGE"                                 = 17,
   "MESSAGEix"                             = 18,
   "OPEN-PROM"                             =  4,

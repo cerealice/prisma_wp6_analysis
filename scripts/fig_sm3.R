@@ -247,9 +247,9 @@ model_short_names <- c(
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGEix",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
-  "REMIND-MAgPIE 3.7-4.14"            = "REMIND",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND-\nMAgPIE",
   "WITCH 6.0"                          = "WITCH",
-  "IMACLIM 2.0"                        = "IMACLIM"
+  "IMACLIM 2.0"                        = "IMACLIM-R"
 )
 gsat <- gsat %>%
   mutate(model = ifelse(model %in% names(model_short_names),

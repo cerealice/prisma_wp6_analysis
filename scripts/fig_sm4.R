@@ -62,12 +62,12 @@ gdp_years_std <- c(seq(2020, 2050, by = 5), seq(2060, 2100, by = 10))
 # ── Model short names ──────────────────────────────────────────
 model_short_names <- c(
   "GEM-E3 V2026"                       = "GEM-E3",
-  "IMACLIM 2.0"                        = "IMACLIM",
+  "IMACLIM 2.0"                        = "IMACLIM-R",
   "IMAGE 3.4"                          = "IMAGE",
   "MESSAGEix-GLOBIOM-GAINS 2.1-M-R12" = "MESSAGE",
   "OPEN-PROM 2.2"                      = "OPEN-PROM",
-  "REMIND-MAgPIE 3.6-4.14"            = "REMIND 3.6",
-  "REMIND-MAgPIE 3.7-4.14"            = "REMIND 3.7",
+  "REMIND-MAgPIE 3.6-4.14"            = "REMIND-MAgPIE",
+  "REMIND-MAgPIE 3.7-4.14"            = "REMIND-MAgPIE",
   "WITCH 6.0"                          = "WITCH"
 )
 short_name <- function(x) ifelse(x %in% names(model_short_names), model_short_names[x], x)
